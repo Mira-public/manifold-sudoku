@@ -4,12 +4,8 @@ import time
 import os
 import requests
 import datetime
-
-MODEL = "gpt-3.5-turbo"
-
-PROMPT_TOKENS = 0
-OUTPUT_TOKENS = 0
-TOTAL_TOKENS = 0
+from dataclasses import dataclass
+import re
 
 def convert_pairs_to_openai(entries):
     formatted_messages = [{"role": role, "content": content} for role, content in entries]
@@ -20,6 +16,54 @@ import requests
 def openai_api_key():
     return os.environ.get("OPENAI_API_KEY")
 
+def find_solved_sudoku(text):
+    pattern = r"([1-9][0\-_|\+\s\n]*?){81}"
+    match = re.search(pattern, text)
+    if match:
+        return match.group(0)
+    else:
+        return None
+
+
+@dataclass
+class Checkpoint:
+    args = None
+    turn_number: int = 0
+    prompt_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+    conversation = []
+    
+    def total_cost(self, model):
+        if model == "gpt-3.5-turbo":
+            return 0.002 * self.total_tokens / 1000. # $0.002 / 1k tokens
+        elif model == "gpt-4":
+            return 0.03 * self.prompt_tokens / 1000. + 0.06 * self.output_tokens / 1000.
+        
+    def save(self):
+        checkpoint = {
+            "args": vars(self.args),
+            "turn_number": self.turn_number,
+            "prompt_tokens": self.prompt_tokens,
+            "output_tokens": self.output_tokens,
+            "total_tokens": self.total_tokens,
+            "conversation": self.conversation,
+        }
+        with open(self.args.checkpoint, 'w') as f:
+            return json.dump(checkpoint, f)
+
+    def load(filename):
+        with open(filename, 'r') as f:
+            checkpoint = json.load(f)
+        ckpt = Checkpoint()
+        ckpt.args = checkpoint["args"]
+        ckpt.turn_number = checkpoint["turn_number"]
+        ckpt.prompt_tokens = checkpoint["prompt_tokens"]
+        ckpt.output_tokens = checkpoint["output_tokens"]
+        ckpt.total_tokens = checkpoint["total_tokens"]
+        ckpt.conversation = checkpoint["conversation"]
+        return ckpt
+            
 # The official Python bindings were taking like 3 minutes for some reason, so just POST the API directly.
 def openai_chat_completion(messages, args, n=1):
     url = "https://api.openai.com/v1/chat/completions"
@@ -42,16 +86,13 @@ def openai_chat_completion(messages, args, n=1):
         if response.status_code == 200:
             return response.json()
         else:
-            if attempt < max_retries - 1:
+            if attempt < args.max_retries - 1:
                 print("Request failed. Sleeping and then retrying")
-                sleep(2 ** attempt)  # Exponential backoff
+                time.sleep(2 ** attempt)  # Exponential backoff
             else:
-                raise Exception(f"OpenAI API request failed after {max_retries} attempts with status code {response.status_code}: {response.text}")
+                raise Exception(f"OpenAI API request failed after {args.max_retries} attempts with status code {response.status_code}: {response.text}")
 
-def run_gpt_4(entries, args):
-    global PROMPT_TOKENS
-    global OUTPUT_TOKENS
-    global TOTAL_TOKENS
+def run_gpt_4(entries, args, statistics):
     #return "mock GPT-4 string" # Use to test without hitting API
     print(f"About to run {args.model}")
     print(f"{len(entries)} Entries: {entries}")
@@ -67,9 +108,9 @@ def run_gpt_4(entries, args):
     response = openai_chat_completion(openai_entries, args)
     elapsed_time = time.time() - start_time
     print(f"Elapsed time for {args.model} call: {elapsed_time:.2f} seconds. {response}")
-    TOTAL_TOKENS += response["usage"]["total_tokens"]
-    OUTPUT_TOKENS += response["usage"]["completion_tokens"]
-    PROMPT_TOKENS += response["usage"]["prompt_tokens"]
+    statistics.total_tokens += response["usage"]["total_tokens"]
+    statistics.output_tokens += response["usage"]["completion_tokens"]
+    statistics.prompt_tokens += response["usage"]["prompt_tokens"]
     return response["choices"][0]["message"]["content"].strip()
 
 def collect_transition_rules_until_limit(fixed_prompt_function, response_limit=50, total_limit=200):
@@ -113,20 +154,20 @@ def string_to_visual_representation(puzzle_string):
         visual_representation += visual_row.rstrip() + '\n'
     return visual_representation
 
-def apply_transition_rule(entries, transition_rule, args):
+def apply_transition_rule(checkpoint, transition_rule, args):
     def translate_index(index):
         if index < 0:
-            return index + len(entries)+1
+            return index + len(checkpoint.conversation)+1
         else:
             return index
     def insert(index, role, message):
         index = translate_index(index)
-        entries.insert(index, (role, message))
+        checkpoint.conversation.insert(index, (role, message))
     def remove(index):
-        entries.pop(index)
+        checkpoint.conversation.pop(index)
     if transition_rule[0] == "Remove":
         index = translate_index(transition_rule[1])
-        entries.pop(index)
+        checkpoint.conversation.pop(index)
     elif transition_rule[0] == "Insert":
         index, message = translate_index(transition_rule[1]), transition_rule[2]
         insert(index, "user", message)
@@ -136,23 +177,26 @@ def apply_transition_rule(entries, transition_rule, args):
         insert(index, "user", rendered_puzzle)
     elif transition_rule[0] == "InsertResponse":
         index = translate_index(transition_rule[1])
-        response = run_gpt_4(entries, args)
+        response = run_gpt_4(checkpoint.conversation, args, checkpoint)
         insert(index, "assistant", response)
-        log_conversation(entries, args.output)
-    return entries
+        checkpoint.save() # Long-running API call
+        log_conversation(checkpoint.conversation, args.output)
+        potential_solution = find_solved_sudoku(response)
+        if potential_solution and args.stop_if_solved_puzzle_detected:
+            print(f"Found a potential solved Sudoku puzzle: {potential_solution}")
+            exit()
 
-def execute_fixed_prompt(fixed_prompt, args):
+
+def execute_fixed_prompt(checkpoint, fixed_prompt, args):
     transition_rules = collect_transition_rules_until_limit(fixed_prompt, response_limit=args.max_turns, total_limit=args.max_entries)
     entries = []
 
     for transition_rule in transition_rules:
-        entries = apply_transition_rule(entries, transition_rule, args)
+        entries = apply_transition_rule(checkpoint, transition_rule, args)
         
     return {
-        "entries": entries,
-        "prompt_tokens": PROMPT_TOKENS,
-        "output_tokens": OUTPUT_TOKENS,
-        "total_tokens": TOTAL_TOKENS,
+        "entries": checkpoint.conversation,
+        "statistics": checkpoint,
     }
 
 def log_conversation(entries, log_file_name):
