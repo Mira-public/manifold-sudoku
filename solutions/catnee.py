@@ -1,4 +1,4 @@
-from sudoku import string_to_list_of_lists, string_to_visual_representation
+from manifold_sudoku import string_to_list_of_lists, string_to_visual_representation
 
 def catnee_representation(puzzle):
     rows = 'ABCDEFGHI'

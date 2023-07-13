@@ -6,6 +6,7 @@ import requests
 import datetime
 from dataclasses import dataclass
 import re
+from sudoku import Sudoku
 
 def convert_pairs_to_openai(entries):
     formatted_messages = [{"role": role, "content": content} for role, content in entries]
@@ -24,6 +25,9 @@ def find_solved_sudoku(text):
     else:
         return None
 
+def condense_sudoku(text):
+    return ''.join(char for char in text if char.isdigit())
+    
 
 @dataclass
 class Checkpoint:
@@ -63,7 +67,18 @@ class Checkpoint:
         ckpt.total_tokens = checkpoint["total_tokens"]
         ckpt.conversation = checkpoint["conversation"]
         return ckpt
-            
+    
+def solve_puzzle(puzzle_string):
+    board = string_to_list_of_lists(puzzle_string)
+    sudoku = Sudoku(3,3,board=board)
+    try:
+        solved_board = sudoku.solve(raising=True).board
+        #print(solved_board)
+        return solved_board
+    except:
+        return None
+    
+    
 # The official Python bindings were taking like 3 minutes for some reason, so just POST the API directly.
 def openai_chat_completion(messages, args, n=1):
     url = "https://api.openai.com/v1/chat/completions"
@@ -93,7 +108,8 @@ def openai_chat_completion(messages, args, n=1):
                 raise Exception(f"OpenAI API request failed after {args.max_retries} attempts with status code {response.status_code}: {response.text}")
 
 def run_gpt_4(entries, args, statistics):
-    #return "mock GPT-4 string" # Use to test without hitting API
+    if args.model == 'mock':
+        return "mock GPT-4 string" # Use to test without hitting API
     print(f"About to run {args.model}")
     print(f"{len(entries)} Entries: {entries}")
     start_time = time.time()
@@ -154,6 +170,14 @@ def string_to_visual_representation(puzzle_string):
         visual_representation += visual_row.rstrip() + '\n'
     return visual_representation
 
+def string_to_2d_representation_no_bars(puzzle):
+    xss = string_to_list_of_lists(puzzle)
+    representation = ""
+    for xs in xss:
+        representation += " ".join([str(x) for x in xs])
+        representation += "\n"
+    return representation
+
 def apply_transition_rule(checkpoint, transition_rule, args):
     def translate_index(index):
         if index < 0:
@@ -183,9 +207,15 @@ def apply_transition_rule(checkpoint, transition_rule, args):
         log_conversation(checkpoint.conversation, args.output)
         potential_solution = find_solved_sudoku(response)
         if potential_solution and args.stop_if_solved_puzzle_detected:
-            print(f"Found a potential solved Sudoku puzzle: {potential_solution}")
-            exit()
-
+            print(f"Found a potential solved Sudoku puzzle:\n{potential_solution}")
+            condensed = condense_sudoku(potential_solution)
+            solution = solve_puzzle(condensed)
+            if solution:
+                print("And it was solved: " + str(solution))
+                exit()
+            else:
+                print("But this solution is invalid")
+                exit()
 
 def execute_fixed_prompt(checkpoint, fixed_prompt, args):
     transition_rules = collect_transition_rules_until_limit(fixed_prompt, response_limit=args.max_turns, total_limit=args.max_entries)

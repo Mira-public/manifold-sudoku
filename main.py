@@ -1,5 +1,6 @@
 from solutions.catnee import catnee_prompt_1
-from sudoku import collect_transition_rules_until_limit, execute_fixed_prompt, Checkpoint, find_solved_sudoku
+from solutions.joshua import joshua_prompt_1
+from manifold_sudoku import collect_transition_rules_until_limit, execute_fixed_prompt, Checkpoint, find_solved_sudoku, string_to_visual_representation, solve_puzzle
 import argparse
 import time
 import copy
@@ -14,7 +15,29 @@ puzzle_banks = {
         "604000053000000092080400710800071500090305000025000070036014000100702000500806024", # April 29, 2023
         "400000237030005008800200495706300051040080003593706004000600100600840000908000000", # April 28, 2023
         "002001070907005080800070096003050240070000030201040000020530800089000000030009427", # April 27, 2023
-        ]
+        ],
+    "latimes-medium": [
+        "051000307009700000437029056000503900300000080748061205912008000000002068063017009", # June 23, 2023
+        "706000495031209000490000002042506100000008009010932604370621008000350270060007031", # June 24, 2023
+        "450290786060000003100070409930024500006000132000800070070600805015400097208005000", # June 25, 2023
+        "431000000600040000000090100047200013006730009000450062020900600304065201168027054", # June 26, 2023
+        "600714030438200601090600000069305047543000062070000500000000309002008000906000720", # June 27, 2023
+        "900562074060000000504100008000059060030480720005000019206070000390810200408003907", # June 28, 2023
+        "000203004070000000000401597803560420010000678060000050140020830600050042285700910", # June 29, 2023
+        "030004500000070020401900000087400050050100004004000870005200060690000048872009000", # June 30, 2023
+        "029000803005007000080053172104000006000100285060000400200800000537601920090030504", # July 1, 2023
+        "000168000760000000003900456009015000054700201307024500500400670900007100270001390", # July 2, 2023
+        "090300200045680973008000061900006708002008050070090124700400000009701800004060090", # July 3, 2023
+        "500930000890062400020000000000006500005400900000020031001840205002010840038050600", # July 4, 2023
+        "000800020430260000000004030970038042001572960325000800000007306000401050500000170", # July 5, 2023
+        "005090000700600589400105230840020060000010708000003900016008400008040090390067805", # July 6, 2023
+        "003960082491008006000000010009647500000009160004100790320090600070020049908010000", # July 7, 2023
+        "603007001590834002200000049018070035005009028060580100020060093000300007309450216", # July 8, 2023
+        "080670030000002800670930140560090710910400000000001060004186002000009000300720001", # July 9, 2023
+        "400890050026405008500010402800040000139080260200009001050030049094100000300000506", # July 10, 2023
+        "004072108000038000830645720000510072090200360050003401900057000203400850400000000", # July 11, 2023
+        "010060000000300007000791086035200048008400960104006500420000000081650203006103870", # July 12, 2023
+    ]
 }
 
 def check_file(args):
@@ -28,6 +51,17 @@ def check_file(args):
     else:
         print("No potential solved Sudoku puzzle found in the file.")
 
+def check_puzzle(args):
+    for k,puzzles in puzzle_banks.items():
+        for puzzle in puzzles:
+            if solve_puzzle(puzzle):
+                continue
+            else:
+                print("Bad puzzle:", puzzle)
+
+def print_puzzle(args):
+    print(string_to_visual_representation(args.puzzle))
+        
 def main():
     parser = argparse.ArgumentParser(description="Solve Sudoku using GPT-4")
     subparsers = parser.add_subparsers()
@@ -50,6 +84,16 @@ def main():
     parser_check_file.add_argument("file_path", help="Path to the file to check.")
     parser_check_file.set_defaults(func=check_file)
 
+    # Create 'print-puzzle' subcommand
+    parser_print_puzzle = subparsers.add_parser("print-puzzle", help="Print the puzzle")
+    parser_print_puzzle.add_argument('--puzzle', type=str, required=True)
+    parser_print_puzzle.set_defaults(func=print_puzzle)
+
+    # Create 'check-puzzle' subcommand
+    parser_check_puzzle = subparsers.add_parser("check-puzzle", help="Check the puzzle bank")
+    parser_check_puzzle.add_argument('--puzzle', type=str)
+    parser_check_puzzle.set_defaults(func=check_puzzle)
+    
     args = parser.parse_args()
     func = args.func
     del args.func
@@ -58,6 +102,7 @@ def main():
 def run_prompt(args):
     prompts = {
         'catnee-1': catnee_prompt_1,
+        'joshua-1': joshua_prompt_1,
     }
 
     puzzles =  puzzle_banks[args.puzzle] if args.puzzle in puzzle_banks else args.puzzle.split(",")
