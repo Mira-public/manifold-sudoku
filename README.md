@@ -3,10 +3,11 @@
 Judging script used for the [M20k Sudoku Challenge](https://manifold.markets/Mira/will-a-prompt-that-enables-gpt4-to?r=TWlyYQ)
 
 Instructions:
-1. Install python. Should be no extra libraries needed.
-2. Set OPENAI_API_KEY environment variable
-3. `python3 main.py run-prompt --help` to see every option, or open `run.sh` to see an example invocation.
-4. See `solutions/catnee.py` to see an example prompt.
+1. Install python.
+2. Install the `py-sudoku` library: `python3 -m pip install py-sudoku`
+3. Set OPENAI_API_KEY environment variable
+4. `python3 main.py run-prompt --help` to see every option, or open `run.sh` to see an example invocation.
+5. See `solutions/catnee.py` to see an example prompt.
 
 Puzzles should be provided in the format "604000053000000092080400710800071500090305000025000070036014000100702000500806024" which are the numbers left-to-right, top-to-bottom with 0 representing blank:
 ```
