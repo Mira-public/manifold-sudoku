@@ -1,11 +1,13 @@
 from solutions.catnee import catnee_prompt_1
 from solutions.joshua import joshua_prompt_1
+from solutions.peter import peter_prompt_1
 from manifold_sudoku import collect_transition_rules_until_limit, execute_fixed_prompt, Checkpoint, find_solved_sudoku, string_to_visual_representation, solve_puzzle
 import argparse
 import time
 import copy
 import concurrent.futures
 import os
+from pathlib import Path
 
 puzzle_banks = {
     # https://www.latimes.com/games/sudoku
@@ -67,6 +69,7 @@ def main():
     subparsers = parser.add_subparsers()
 
     parser_run_prompt = subparsers.add_parser("run-prompt")
+    parser_run_prompt.add_argument('--log-dir', type=str, default="outputs", help="Directory to store outputs")
     parser_run_prompt.add_argument('--max-output-tokens', type=int, default=2048, help='Maximum number of output tokens')
     parser_run_prompt.add_argument('--max-turns', type=int, default=50, help='Maximum number of turns')
     parser_run_prompt.add_argument('--max-entries', type=int, default=200, help='Maximum number of entries to unroll the fixed prompt to')
@@ -103,6 +106,7 @@ def run_prompt(args):
     prompts = {
         'catnee-1': catnee_prompt_1,
         'joshua-1': joshua_prompt_1,
+        'peter-1': peter_prompt_1,
     }
 
     puzzles =  puzzle_banks[args.puzzle] if args.puzzle in puzzle_banks else args.puzzle.split(",")
@@ -112,9 +116,11 @@ def run_prompt(args):
 
     print(f"Done with all puzzles. Elapsed time={time.time() - start_time}\n")
 
-def evaluate_multiple_puzzles(puzzles, fixed_prompt, args, max_workers=5):
+def evaluate_multiple_puzzles(puzzles, fixed_prompt, args):
     results = []
 
+    max_workers = args.num_parallel
+    
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(evaluate_puzzle, puzzle, fixed_prompt, args) for puzzle in puzzles]
 
@@ -130,9 +136,11 @@ def evaluate_multiple_puzzles(puzzles, fixed_prompt, args, max_workers=5):
 def evaluate_puzzle(puzzle, fixed_prompt, args):
     args = copy.deepcopy(args)
     args.puzzle = puzzle
-    args.output += "." + puzzle
-    args.checkpoint = puzzle + '.ckpt'
-    if os.path.exists(args.checkpoint):
+    log_dir = Path(args.log_dir)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    args.output = str(log_dir / (args.prompt + "." + puzzle + "." + args.output))
+    args.checkpoint = str(log_dir / (args.prompt + "." + puzzle + '.ckpt'))
+    if Path(args.checkpoint).exists():
         with open(args.output, 'a') as log_file:
             log_file.write("Resuming from checkpoint")
         checkpoint = Checkpoint.load(args.checkpoint)

@@ -11,8 +11,6 @@ from sudoku import Sudoku
 def convert_pairs_to_openai(entries):
     formatted_messages = [{"role": role, "content": content} for role, content in entries]
     return formatted_messages
-import json
-import requests
 
 def openai_api_key():
     return os.environ.get("OPENAI_API_KEY")
@@ -58,6 +56,7 @@ class Checkpoint:
 
     def load(filename):
         with open(filename, 'r') as f:
+            print(f"About to load {filename}")
             checkpoint = json.load(f)
         ckpt = Checkpoint()
         ckpt.args = checkpoint["args"]
