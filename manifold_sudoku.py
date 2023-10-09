@@ -7,6 +7,10 @@ import datetime
 from dataclasses import dataclass
 import re
 from sudoku import Sudoku
+import tiktoken
+from typing import Callable
+import inspect
+import itertools
 
 def convert_pairs_to_openai(entries):
     formatted_messages = [{"role": role, "content": content} for role, content in entries]
@@ -177,6 +181,32 @@ def string_to_2d_representation_no_bars(puzzle):
         representation += "\n"
     return representation
 
+enc = tiktoken.get_encoding("cl100k_base")
+
+@dataclass
+class Insert:
+    index: int
+    message: str
+    tag: str = "user"
+
+@dataclass
+class Remove:
+    index: int
+
+@dataclass
+class InsertPuzzle:
+    index: int
+    render_func: Callable[[str], str]
+
+@dataclass
+class InsertResponse:
+    index: int
+
+@dataclass
+class Truncate:
+    index: int
+    num_tokens: int
+    
 def apply_transition_rule(checkpoint, transition_rule, args):
     def translate_index(index):
         if index < 0:
@@ -188,40 +218,55 @@ def apply_transition_rule(checkpoint, transition_rule, args):
         checkpoint.conversation.insert(index, (role, message))
     def remove(index):
         checkpoint.conversation.pop(index)
-    if transition_rule[0] == "Remove":
-        index = translate_index(transition_rule[1])
-        checkpoint.conversation.pop(index)
-    elif transition_rule[0] == "Insert":
-        index, message = translate_index(transition_rule[1]), transition_rule[2]
-        insert(index, "user", message)
-    elif transition_rule[0] == "InsertPuzzle":
-        index, render_func = translate_index(transition_rule[1]), transition_rule[2]
-        rendered_puzzle = render_func(args.puzzle)
-        insert(index, "user", rendered_puzzle)
-    elif transition_rule[0] == "InsertResponse":
-        index = translate_index(transition_rule[1])
-        response = run_gpt_4(checkpoint.conversation, args, checkpoint)
-        insert(index, "assistant", response)
-        checkpoint.save() # Long-running API call
-        log_conversation(checkpoint.conversation, args.output)
-        potential_solution = find_solved_sudoku(response)
-        if potential_solution and args.stop_if_solved_puzzle_detected:
-            print(f"Found a potential solved Sudoku puzzle:\n{potential_solution}")
-            condensed = condense_sudoku(potential_solution)
-            solution = solve_puzzle(condensed)
-            if solution:
-                print("And it was solved: " + str(solution))
-                exit()
-            else:
-                print("But this solution is invalid")
-                exit()
+    match transition_rule:
+        case Remove(index):
+            index = translate_index(index)
+            checkpoint.conversation.pop(index)
+        case Insert(index, message, tag):
+            index = translate_index(index)
+            insert(index, tag, message)
+        case InsertPuzzle(index, render_func):
+            index = translate_index(index)
+            rendered_puzzle = render_func(args.puzzle)
+            insert(index, "user", rendered_puzzle)
+        case InsertResponse(index):
+            index = translate_index(index)
+            response = run_gpt_4(checkpoint.conversation, args, checkpoint)
+            insert(index, "assistant", response)
+            checkpoint.save() # Long-running API call
+            log_conversation(checkpoint.conversation, args.output)
+            potential_solution = find_solved_sudoku(response)
+            if potential_solution and args.stop_if_solved_puzzle_detected:
+                print(f"Found a potential solved Sudoku puzzle:\n{potential_solution}")
+                condensed = condense_sudoku(potential_solution)
+                solution = solve_puzzle(condensed)
+                if solution:
+                    print("And it was solved: " + str(solution))
+                    exit()
+                else:
+                    print("But this solution is invalid")
+                    exit()
+        case Truncate(index, num_tokens):
+            index = translate_index(transition_rule[1])
+            raise("unimplemented")
+            # TODO - turn entry to tokens and take last
+        
 
 def execute_fixed_prompt(checkpoint, fixed_prompt, args):
-    transition_rules = collect_transition_rules_until_limit(fixed_prompt, response_limit=args.max_turns, total_limit=args.max_entries)
+    if not inspect.isgeneratorfunction(fixed_prompt):
+        raise Exception("Prompt must be generator style")
+    transition_rules = itertools.islice(fixed_prompt(), args.max_entries)
+    #transition_rules = collect_transition_rules_until_limit(fixed_prompt, response_limit=args.max_turns, total_limit=args.max_entries)
     entries = []
 
+    turn = 0
     for transition_rule in transition_rules:
+        match transition_rule:
+            case InsertResponse(_):
+                turn += 1
         entries = apply_transition_rule(checkpoint, transition_rule, args)
+        if turn >= args.max_turns:
+            break
         
     return {
         "entries": checkpoint.conversation,
