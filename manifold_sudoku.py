@@ -8,9 +8,11 @@ from dataclasses import dataclass
 import re
 from sudoku import Sudoku
 import tiktoken
-from typing import Callable
+from typing import Callable, Any
 import inspect
 import itertools
+import openai
+import hashlib
 
 def convert_pairs_to_openai(entries):
     formatted_messages = [{"role": role, "content": content} for role, content in entries]
@@ -21,9 +23,9 @@ def openai_api_key():
 
 def find_solved_sudoku(text):
     pattern = r"([1-9][0\-_|\+\s\n]*?){81}"
-    match = re.search(pattern, text)
-    if match:
-        return match.group(0)
+    mat = re.search(pattern, text)
+    if mat:
+        return mat.group(0)
     else:
         return None
 
@@ -34,6 +36,7 @@ def condense_sudoku(text):
 @dataclass
 class Checkpoint:
     args = None
+    transition_index: int = 0
     turn_number: int = 0
     prompt_tokens: int = 0
     output_tokens: int = 0
@@ -45,31 +48,46 @@ class Checkpoint:
             return 0.002 * self.total_tokens / 1000. # $0.002 / 1k tokens
         elif model == "gpt-4":
             return 0.03 * self.prompt_tokens / 1000. + 0.06 * self.output_tokens / 1000.
-        
-    def save(self):
+
+    def serializable(self):
         checkpoint = {
             "args": vars(self.args),
+            "transition_index": self.transition_index,
             "turn_number": self.turn_number,
             "prompt_tokens": self.prompt_tokens,
             "output_tokens": self.output_tokens,
             "total_tokens": self.total_tokens,
             "conversation": self.conversation,
         }
+        return checkpoint
+        
+    def save(self):
+        checkpoint = self.serializable()
         with open(self.args.checkpoint, 'w') as f:
             return json.dump(checkpoint, f)
 
-    def load(filename):
+    @classmethod
+    def load(cls, filename):
         with open(filename, 'r') as f:
             print(f"About to load {filename}")
             checkpoint = json.load(f)
-        ckpt = Checkpoint()
+        ckpt = cls()
         ckpt.args = checkpoint["args"]
+        ckpt.transition_index = checkpoint["transition_index"]
         ckpt.turn_number = checkpoint["turn_number"]
         ckpt.prompt_tokens = checkpoint["prompt_tokens"]
         ckpt.output_tokens = checkpoint["output_tokens"]
         ckpt.total_tokens = checkpoint["total_tokens"]
         ckpt.conversation = checkpoint["conversation"]
         return ckpt
+
+    @classmethod
+    def print_checkpoint(cls, entries):
+        print("Conversation token counts")
+        for i, entry in enumerate(entries):
+            print(entry)
+            token_count = gpt4_enc.encode(entry[1])
+            print(f"{i}: {len(token_count)} tokens")
     
 def solve_puzzle(puzzle_string):
     board = string_to_list_of_lists(puzzle_string)
@@ -110,23 +128,100 @@ def openai_chat_completion(messages, args, n=1):
             else:
                 raise Exception(f"OpenAI API request failed after {args.max_retries} attempts with status code {response.status_code}: {response.text}")
 
+CACHE_FILE = "cache.json"
+CACHE = {}
+
+def get_hash(x):
+    return hashlib.sha256(json.dumps(x).encode('utf-8')).hexdigest()
+
+def load_cache():
+    global CACHE
+    try:
+        with open(CACHE_FILE, 'r') as f:
+            CACHE = json.load(f)
+        print(f"Loaded response cache with {len(CACHE)} entries")
+    except FileNotFoundError:
+        print("No existing cache detected.\n")
+    except e:
+        print(f"Received error loading cache: {e}")
+
+def save_cache():
+    global CACHE
+    with open(CACHE_FILE, 'w', encoding='utf-8') as f:
+        json.dump(CACHE, f, sort_keys=True)
+
+def get_cache(key):
+    k = get_hash(key)
+    return CACHE.get(k)
+
+def set_cache(key, value):
+    global CACHE
+    k = get_hash(key)
+    CACHE[k] = value
+    save_cache()
+
+# Remove args that shouldn't change the result of any single invocation to GPT-4
+def important_args(args):
+    ret = vars(args).copy()
+    del ret['max_turns']
+    del ret['max_transitions']
+    del ret['log_style']
+    return ret
+    
+def count_conversation_tokens(entries):
+    token_counts = [len(gpt4_enc.encode(message)) for (_,message) in entries]
+    message_tokens = sum(token_counts)
+    speaker_tokens = len(entries)
+    padding_tokens = 15 + 12 # TODO: Figure out where the 15 extra tokens are coming from in Emily's prompt A and 12 in prompt B
+    return {
+        "token_counts": token_counts,
+        "message_tokens": message_tokens,
+        "speaker_tokens": speaker_tokens,
+        "padding_tokens": padding_tokens,
+        "total_tokens": message_tokens + speaker_tokens + padding_tokens,
+        }
+    
 def run_gpt_4(entries, args, statistics):
     if args.model == 'mock':
         return "mock GPT-4 string" # Use to test without hitting API
-    print(f"About to run {args.model}")
-    print(f"{len(entries)} Entries: {entries}")
-    start_time = time.time()
-    # response = openai.ChatCompletion.create(
-    #     model=model,
-    #     max_tokens=2048,
-    #     n=1,
-    #     temperature=0,
-    #     messages=convert_pairs_to_openai(entries)
-    #)
-    openai_entries = convert_pairs_to_openai(entries)
-    response = openai_chat_completion(openai_entries, args)
-    elapsed_time = time.time() - start_time
-    print(f"Elapsed time for {args.model} call: {elapsed_time:.2f} seconds. {response}")
+    cache_key = {"conversation": entries, "args": important_args(args)}
+    c = get_cache(cache_key)
+    if c is not None:
+        response = c
+    else:
+        token_stats = count_conversation_tokens(entries)
+        max_tokens = args.max_output_tokens
+        max_output_tokens = max_tokens - token_stats["total_tokens"]
+        print(f"About to run {args.model} with {max_tokens}={max_output_tokens}+sum({token_stats['token_counts']})+{token_stats['speaker_tokens']}+{token_stats['padding_tokens']}")
+        print(f"{len(entries)} Entries: {entries}")
+        start_time = time.time()
+        for i in range(args.max_retries):
+            try:
+                response = openai.ChatCompletion.create(
+                    model=args.model,
+                    max_tokens=max_output_tokens,
+                    n=1,
+                    temperature=0,
+                    messages=convert_pairs_to_openai(entries)
+                )
+                break
+            except openai.error.Timeout as e:
+                print(f"Received timeout: {e}")
+                response = None
+                continue
+            except openai.error.InvalidRequestError as e:
+                Checkpoint.print_checkpoint(entries)
+                raise e
+        if response is None:
+            raise Exception("Unable to get a response after {args.max_retries} attempts")
+            
+        #openai_entries = convert_pairs_to_openai(entries)
+        # response = openai_chat_completion(openai_entries, args)
+        elapsed_time = time.time() - start_time
+        print(f"Elapsed time for {args.model} call: {elapsed_time:.2f} seconds.\n")
+        if max_output_tokens == response["usage"]["completion_tokens"]:
+            raise Exception(f"Received exactly {max_output_tokens} tokens. Exiting because you may have hit the limit accidentally.")
+        set_cache(cache_key, response)
     statistics.total_tokens += response["usage"]["total_tokens"]
     statistics.output_tokens += response["usage"]["completion_tokens"]
     statistics.prompt_tokens += response["usage"]["prompt_tokens"]
@@ -202,12 +297,45 @@ class InsertPuzzle:
 class InsertResponse:
     index: int
 
+gpt4_enc = tiktoken.get_encoding("cl100k_base")
+    
 @dataclass
 class Truncate:
     index: int
     num_tokens: int
+    tokenizer: Any = gpt4_enc
     
+def truncate_to_last_n_tokens(text, n, encoding):
+    """
+    Truncate text to the last n tokens.
+    
+    :param text: str, the input text
+    :param n: int, the number of tokens to truncate to
+    :param encoding: tiktoken encoding, the tokenizer model
+    :return: str, the truncated text
+    """
+    # Tokenize the input text
+    tokens = list(encoding.encode(text))
+    
+    # Truncate to the last n tokens
+    truncated_tokens = tokens[-n:]
+    
+    # Decode back to text
+    truncated_text = encoding.decode(truncated_tokens)
+    
+    return truncated_text
+
+@dataclass
+class PuzzleSolution:
+    checkpoint : Any
+    potential_solution : str
+    solution : Any
+
 def apply_transition_rule(checkpoint, transition_rule, args):
+    def conv_token_counts(pair):
+        return len(gpt4_enc.encode(pair[1]))
+    print(f"Turn {checkpoint.turn_number} rule {checkpoint.transition_index} on {len(checkpoint.conversation)} entries with tokens {list(map(conv_token_counts, checkpoint.conversation))}: {transition_rule}")
+    checkpoint.transition_index += 1
     def translate_index(index):
         if index < 0:
             return index + len(checkpoint.conversation)+1
@@ -233,39 +361,48 @@ def apply_transition_rule(checkpoint, transition_rule, args):
             index = translate_index(index)
             response = run_gpt_4(checkpoint.conversation, args, checkpoint)
             insert(index, "assistant", response)
+            checkpoint.turn_number += 1
             checkpoint.save() # Long-running API call
-            log_conversation(checkpoint.conversation, args.output)
+            match args.log_style:
+                case "mira":
+                    log_conversation(checkpoint, args.output)
+                case "emily":
+                    log_conversation_emily(checkpoint, args.output)
             potential_solution = find_solved_sudoku(response)
             if potential_solution and args.stop_if_solved_puzzle_detected:
                 print(f"Found a potential solved Sudoku puzzle:\n{potential_solution}")
                 condensed = condense_sudoku(potential_solution)
                 solution = solve_puzzle(condensed)
-                if solution:
-                    print("And it was solved: " + str(solution))
-                    exit()
-                else:
-                    print("But this solution is invalid")
-                    exit()
+                raise PuzzleSolution(checkpoint, potential_solution, solution)
         case Truncate(index, num_tokens):
-            index = translate_index(transition_rule[1])
-            raise("unimplemented")
-            # TODO - turn entry to tokens and take last
+            index = translate_index(index)
+            entry = checkpoint.conversation[index]
+            checkpoint.conversation[index] = (entry[0], truncate_to_last_n_tokens(entry[1], num_tokens, gpt4_enc))
         
+def take_until(gen, pred, max_num):
+    for x in gen:
+        if max_num <= 0:
+            return
+        yield x
+        if pred(x):
+            max_num -= 1
 
+def is_response(x):
+    match x:
+        case InsertResponse(_):
+            return True
+    return False
+            
 def execute_fixed_prompt(checkpoint, fixed_prompt, args):
     if not inspect.isgeneratorfunction(fixed_prompt):
         raise Exception("Prompt must be generator style")
-    transition_rules = itertools.islice(fixed_prompt(), args.max_entries)
+    transition_rules = itertools.islice(take_until(fixed_prompt(), is_response, args.max_turns), checkpoint.transition_index, args.max_transitions)
     #transition_rules = collect_transition_rules_until_limit(fixed_prompt, response_limit=args.max_turns, total_limit=args.max_entries)
     entries = []
 
-    turn = 0
     for transition_rule in transition_rules:
-        match transition_rule:
-            case InsertResponse(_):
-                turn += 1
         entries = apply_transition_rule(checkpoint, transition_rule, args)
-        if turn >= args.max_turns:
+        if checkpoint.turn_number >= args.max_turns:
             break
         
     return {
@@ -273,34 +410,32 @@ def execute_fixed_prompt(checkpoint, fixed_prompt, args):
         "statistics": checkpoint,
     }
 
-def log_conversation(entries, log_file_name):
+def log_conversation(checkpoint, log_file_name):
+    entries = checkpoint.conversation
     with open(log_file_name, 'a') as log_file:
         log_file.write(f"Conversation started at: {datetime.datetime.now()}\n")
+        log_file.write(f"Turn number: {checkpoint.turn_number}\n")
         log_file.write("----\n")
 
-        for entry in entries:
+        for i, entry in enumerate(entries):
             speaker, message = entry
-            log_file.write(f"{speaker}: {message}\n")
+            log_file.write(f"Entry {i+1}/{len(entries)} - {speaker}: {message}\n\n")
 
         log_file.write("----\n")
         log_file.write("Conversation ended.\n")
         log_file.write("\n")
 
-# Replace these with actual easy Sudoku puzzles
-puzzles = [
-    "075400001032000095000125080500230004208510000410008652300050920906040030000309508",
-    #"<puzzle_2>",
-    #"<puzzle_3>",
-    #"<puzzle_4>",
-    #"<puzzle_5>",
-]
-
-logs = []
-
-# for puzzle in puzzles:
-#     log = execute_fixed_prompt(puzzle, fixed_prompt)
-#     logs.append(log)
-
-# Validate logs
-# valid_logs = [validate_log(log) for log in logs]
-# print(f"Validation results: {valid_logs}")
+def log_conversation_emily(checkpoint, log_file_name):
+    entries = checkpoint.conversation
+    args = checkpoint.args
+    temperature = 0
+    with open(log_file_name, 'a', newline='\r\n') as f:
+        f.write(f'model:\n{args.model}\n\n')
+        f.write(f'temperature:\n{temperature}\n\n')
+        f.write(f'system_message:\n{entries[0][1]}\n\n')
+        for index, entry in enumerate(entries[1:-1]):
+            speaker, message = entry
+            f.write(f'prompt {index + 1} of {len(entries)-2}:\n{message}\n\n')
+        f.write(f'response:\n{entries[-1][1]}\n\n')
+        f.write('-'*100 + '\n'*11)
+        

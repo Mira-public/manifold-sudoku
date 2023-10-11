@@ -1,7 +1,8 @@
 from solutions.catnee import catnee_prompt_1
 from solutions.joshua import joshua_prompt_1
 from solutions.peter import peter_prompt_1
-from manifold_sudoku import collect_transition_rules_until_limit, execute_fixed_prompt, Checkpoint, find_solved_sudoku, string_to_visual_representation, solve_puzzle
+from solutions.emily.emily import emily_prompt_1
+from manifold_sudoku import collect_transition_rules_until_limit, execute_fixed_prompt, Checkpoint, find_solved_sudoku, string_to_visual_representation, solve_puzzle, PuzzleSolution, load_cache
 import argparse
 import time
 import copy
@@ -80,17 +81,19 @@ def print_puzzle(args):
     print(string_to_visual_representation(args.puzzle))
         
 def main():
+    load_cache()
     parser = argparse.ArgumentParser(description="Solve Sudoku using GPT-4")
     subparsers = parser.add_subparsers()
 
     parser_run_prompt = subparsers.add_parser("run-prompt")
+    parser_run_prompt.add_argument('--log-style', type=str, default="mira", help="Log style")
     parser_run_prompt.add_argument('--log-dir', type=str, default="outputs", help="Directory to store outputs")
-    parser_run_prompt.add_argument('--max-output-tokens', type=int, default=2048, help='Maximum number of output tokens')
+    parser_run_prompt.add_argument('--max-output-tokens', type=int, default=4096, help='Maximum number of output tokens')
     parser_run_prompt.add_argument('--max-turns', type=int, default=50, help='Maximum number of turns')
-    parser_run_prompt.add_argument('--max-entries', type=int, default=200, help='Maximum number of entries to unroll the fixed prompt to')
+    parser_run_prompt.add_argument('--max-transitions', type=int, default=200, help='Maximum number of transition rules to unroll the fixed prompt to')
     parser_run_prompt.add_argument('--output', type=str, default='sudoku_log.txt', help='Output log filename')
     parser_run_prompt.add_argument('--num-parallel', type=int, default=2, help='Maximum number of puzzles to be testing concurrently')
-    parser_run_prompt.add_argument('--model', type=str, default='gpt-4', help='Model ID to use')
+    parser_run_prompt.add_argument('--model', type=str, default='gpt-4-0613', help='Model ID to use')
     parser_run_prompt.add_argument('--puzzle', type=str, required=True, help='Sudoku puzzle string')
     parser_run_prompt.add_argument('--prompt', type=str, required=True, help='Name of the fixed prompt')
     parser_run_prompt.add_argument('--max-retries', type=int, default=3, help='Maximum number of times to retry OpenAI requests')
@@ -122,6 +125,7 @@ def run_prompt(args):
         'catnee-1': catnee_prompt_1,
         'joshua-1': joshua_prompt_1,
         'peter-1': peter_prompt_1,
+        'emily-1': emily_prompt_1,
     }
 
     puzzles =  puzzle_banks[args.puzzle] if args.puzzle in puzzle_banks else args.puzzle.split(",")
@@ -160,16 +164,26 @@ def evaluate_puzzle(puzzle, fixed_prompt, args):
             log_file.write("Resuming from checkpoint")
         checkpoint = Checkpoint.load(args.checkpoint)
         checkpoint.args = args # New command line arguments take priority
+        Checkpoint.print_checkpoint(checkpoint.conversation)
     else:
         # Wipe the log file
         with open(args.output, 'w') as log_file:
-            log_file.write(f"Creating fresh checkpoint for puzzle {args.puzzle}\n")
+            pass
+            #log_file.write(f"Creating fresh checkpoint for puzzle {args.puzzle}\n")
         checkpoint = Checkpoint()
         checkpoint.args = args
 
     start_time = time.time()
-    result = execute_fixed_prompt(checkpoint, fixed_prompt, args)
-    statistics = result["statistics"]
+    try:
+        result_checkpoint = execute_fixed_prompt(checkpoint, fixed_prompt, args)
+    except PuzzleSolution(checkpoint, potential_solution, solution):
+        result_checkpoint = checkpoint
+        if solution:
+            # TODO: Check that it's a solution to the original puzzle, not just any solved Sudoku
+            print("Puzzle solved: " + str(potential_solution))
+        else:
+            print("Puzzle solution invalid: " + str(potential_solution))
+    statistics = result_checkpoint["statistics"]
     with open(args.output, 'a') as log_file:
         log_file.write(f"Done. Elapsed time:{time.time() - start_time} Estimated cost:{statistics.total_cost(args.model)} Prompt tokens:{statistics.prompt_tokens} Output tokes:{statistics.output_tokens} Total tokens:{statistics.total_tokens}\n")
     
