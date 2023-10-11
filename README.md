@@ -4,7 +4,7 @@ Judging script used for the [M20k Sudoku Challenge](https://manifold.markets/Mir
 
 Instructions:
 1. Install python.
-2. Install the `py-sudoku` library: `python3 -m pip install py-sudoku`
+2. Install library requirements: `pip install -r requirements.txt`
 3. Set OPENAI_API_KEY environment variable
 4. `python3 main.py run-prompt --help` to see every option, or open `run.sh` to see an example invocation.
 5. See `solutions/catnee.py` to see an example prompt.
