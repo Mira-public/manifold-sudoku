@@ -44,12 +44,12 @@ def read_file(filename):
 
 script_dir = Path(__file__).resolve().parent
 
-prompt_a = read_file(script_dir / "prompt-A.txt")
-prompt_b = read_file(script_dir / "prompt-B.txt")
+prompt_a = read_file(script_dir / "two" / "prompt-A.txt")
+prompt_b = read_file(script_dir / "two" / "prompt-B.txt")
 
-from .prompt_system import system_message_A, system_message_B, prompt_B_pre_message
+from .two.system_prompts import system_message_A, system_message_B, prompt_B_pre_message
 
-def emily_prompt_1():
+def emily_prompt_2():
     yield InsertPuzzle(0, emily_representation)
     while True:
         # Prompt A
@@ -70,7 +70,7 @@ def emily_prompt_1():
         yield Insert(2, "Awaiting instructions.", tag="assistant")
         # yield puzzle from Prompt A
         yield Insert(4, "Awaiting instructions.", tag="assistant")
-        yield Truncate(5, 300) # <response from previous message>
+        yield Truncate(5, 400) # <response from previous message>
         yield Insert(6, "Awaiting instructions.", tag="assistant")
         yield Insert(7, prompt_b)
         yield InsertResponse(-1)

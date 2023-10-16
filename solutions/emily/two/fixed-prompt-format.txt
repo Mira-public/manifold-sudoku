@@ -1,0 +1,32 @@
+Version 2 has two changes from version 1:
+- Prompt_B takes the last 400 tokens from the prompt_A response instead of 300.
+- The first turn starts directly with prompt_A, as we didn't need to spend a turn just to get the response "Awaiting instructions.", we get that for free.
+
+
+Prompt A:
+message_history = [
+    {"role": "system", "content": system_message_A},
+    {"role": "user", "content": puzzle_input_prompt},
+    {"role": "assistant", "content": "Awaiting instructions."},
+]
+get.response(prompt_A)
+
+
+previous_results = The last 400 tokens of the response to prompt_A
+
+Prompt B:
+message_history = [
+    {"role": "system", "content": system_message_B},
+    {"role": "user", "content": prompt_B_pre_message},
+    {"role": "assistant", "content": "Awaiting instructions."},
+    {"role": "user", "content": puzzle_input_prompt},
+    {"role": "assistant", "content": "Awaiting instructions."},
+    {"role": "user", "content": previous_results},
+    {"role": "assistant", "content": "Awaiting instructions."},
+]
+get.response(prompt_B)
+
+
+puzzle_input_prompt = The last 210 tokens of the response to prompt_B
+
+Repeat until done

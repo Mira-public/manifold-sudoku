@@ -1,7 +1,7 @@
 from solutions.catnee import catnee_prompt_1
 from solutions.joshua import joshua_prompt_1
 from solutions.peter import peter_prompt_1
-from solutions.emily.emily import emily_prompt_1
+from solutions.emily.emily import emily_prompt_2
 from manifold_sudoku import collect_transition_rules_until_limit, execute_fixed_prompt, Checkpoint, find_solved_sudoku, string_to_visual_representation, solve_puzzle, PuzzleSolution, load_cache
 import argparse
 import time
@@ -51,6 +51,8 @@ puzzle_banks = {
         "081023006300590807060080002000050001013000700200600900509002030104800560030910004", # October 7, 2023
         "160903400300070000970080350097040028400000000003100674000806502035204790216000000", # October 8, 2023
         "031790008005014090000620105000140000100509204000208006008461000060000901010080047", # October 9, 2023
+        "028017904600480000000020610010050070070061490009000003700008240053000000184000065", # October 10, 2023
+        "002000347030140506500003008000800000200005009090204065005000801900000700871050694", # October 11, 2023
         ],
 }
 
@@ -125,7 +127,8 @@ def run_prompt(args):
         'catnee-1': catnee_prompt_1,
         'joshua-1': joshua_prompt_1,
         'peter-1': peter_prompt_1,
-        'emily-1': emily_prompt_1,
+        #'emily-1': emily_prompt_1,
+        'emily-2': emily_prompt_2,
     }
 
     puzzles =  puzzle_banks[args.puzzle] if args.puzzle in puzzle_banks else args.puzzle.split(",")
@@ -168,8 +171,8 @@ def evaluate_puzzle(puzzle, fixed_prompt, args):
     else:
         # Wipe the log file
         with open(args.output, 'w') as log_file:
-            pass
-            #log_file.write(f"Creating fresh checkpoint for puzzle {args.puzzle}\n")
+            if args.log_style == "mira":
+                log_file.write(f"Creating fresh checkpoint for puzzle {args.puzzle}\n")
         checkpoint = Checkpoint()
         checkpoint.args = args
 

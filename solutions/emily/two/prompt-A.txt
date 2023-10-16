@@ -1,0 +1,164 @@
+You are going to analyze the sudoku you've just been given.
+The analysis will come down to one thing, finding the candidate elements for each unfilled cell.
+To do this, examine the nine rows, the nine columns, and the nine blocks, and find the elements missing from each set.
+Then, for each unfilled cell (cells with a '0'), examine the elements missing from the row, column, and 3-by-3 block associated with that cell, combine them into a set of common candidates, and check to see whether or not there is Exactly one candidate in that set. Everything else follows from that.
+
+
+
+# Board State
+Trying to play without vision is difficult, so I want you to follow a very specific format.
+Print out the current board state using the exact format shown below (replace the example with the current sudoku).
+We are also finding the missing elements of each set. So we are taking the current row, column, or block, and calculating the set-wise difference between that row, column, or block, and the digits 1-9 shown in all_digits.
+Each block and its missing elements will (between them) exactly cover the digits from 1 to 9 with no duplicates, and with each number appearing exactly once.
+## Rows
+all_digits = [1,2,3,4,5,6,7,8,9]
+
+Print all nine rows and row_missing_elements using the format:
+row: [row], row_missing_elements: all_digits.difference([row]) = [row_missing_elements]
+
+Examples:
+first_row: [1,0,3,4,5,6,0,0,9], first_row_missing_elements: all_digits.difference([1,0,3,4,5,6,0,0,9]) = [2,7,8]
+second_row: [4,5,6,7,8,9,1,2,3], second_row_missing_elements: all_digits.difference([4,5,6,7,8,9,1,2,3]) = []
+third_row: [7,8,0,1,2,3,4,5,6], third_row_missing_elements: all_digits.difference([7,8,0,1,2,3,4,5,6]) = [9]
+fourth_row: [2,3,4,5,6,7,8,0,1], fourth_row_missing_elements: all_digits.difference([2,3,4,5,6,7,8,0,1]) = [9]
+fifth_row: [5,6,7,8,9,1,2,3,4], fifth_row_missing_elements: all_digits.difference([5,6,7,8,9,1,2,3,4]) = []
+sixth_row: [8,9,1,2,0,4,5,6,7], sixth_row_missing_elements: all_digits.difference([8,9,1,2,0,4,5,6,7]) = [3]
+seventh_row: [3,4,5,6,7,8,9,1,2], seventh_row_missing_elements: all_digits.difference([3,4,5,6,7,8,9,1,2]) = []
+eighth_row: [6,0,8,9,1,2,3,0,5], eighth_row_missing_elements: all_digits.difference([6,0,8,9,1,2,3,0,5]) = [4,7]
+ninth_row: [9,0,2,0,4,5,0,7,8], ninth_row_missing_elements: all_digits.difference([9,0,2,0,4,5,0,7,8]) = [1,3,6]
+
+
+## Columns
+all_digits = [1,2,3,4,5,6,7,8,9]
+
+Format:
+column: [column], column_missing_elements: [all_digits].difference([column]) = [column_missing_elements]
+
+Examples:
+first_column: [1,4,7,2,5,8,3,6,9] first_column_missing_elements: all_digits.difference([1,4,7,2,5,8,3,6,9]) = []
+second_column: [0,5,8,3,6,9,4,0,0] second_column_missing_elements: all_digits.difference([0,5,8,3,6,9,4,0,0]) = [1,2,7]
+third_column: [3,6,0,4,7,1,5,8,2] third_column_missing_elements: all_digits.difference([3,6,0,4,7,1,5,8,2]) = [9]
+fourth_column: 
+
+## Blocks
+all_digits = [1,2,3,4,5,6,7,8,9]
+
+Format:
+block: (rows: rows in the block; columns: columns in the block):
+[block]
+block_missing_elements: all_digits.difference([block]) = [block_missing_elements]
+
+Examples:
+top_left_block: (rows: first_row, second_row, third_row; columns: first_column, second_column, third_column)
+[[1,0,3],
+[4,5,6],
+[7,8,0]]
+top_left_block_missing_elements: all_digits.difference([1,0,3,4,5,6,7,8,0]) = [2,9]
+
+top_middle_block: (rows: first_row, second_row, third_row; columns: fourth_column, fifth_column, sixth_column)
+[[4,5,6],
+[7,8,9],
+[1,2,3]]
+top_middle_block_missing_elements: all_digits.difference([4,5,6,7,8,9,1,2,3]) = []
+
+top_right_block: (rows: first_row, second_row, third_row; columns: seventh_column, eighth_column, ninth_column)
+[[0,0,9],
+[1,2,3],
+[4,5,6]]
+top_right_block_missing_elements: all_digits.difference([0,0,9,1,2,3,4,5,6]) = [7,8]
+
+middle_left_block: (rows: fourth_row, fifth_row, sixth_row; columns: first_column, second_column, third_column)
+
+
+### Block missing elements - Clearly listed
+To avoid confusion, the block_missing_elements are listed here.
+
+Use the following format:
+top_left_block_missing_elements: {top_left_block_missing_elements list contents}
+top_middle_block_missing_elements:
+
+
+# Finding and counting the zero elements
+## The positions of the zeros
+For each row we do the following calculations:
+row_unfilled_indices: [row].index(0) = [index of every '0' element in the row]
+row_unfilled_positions: row_unfilled_indices.increment(1) = [each index incremented by 1]
+row_unfilled_columns: the positions as words
+
+Use the following format:
+first_row_unfilled_indices: [1,0,3,4,5,6,0,0,9].index(0) = [1,6,7]
+first_row_unfilled_positions: first_row_unfilled_indices.increment(1) = [2,7,8]
+first_row_unfilled_columns: second, seventh, eighth
+
+
+## Calculate the number of unfilled cells
+total_unfilled_cells = 3 + 0 + 1 + 1 + 0 + 1 + 0 + 2 + 3 = 11
+
+Cap the cells to list:
+max_cells = min(total_unfilled_cells, 17) = 11
+
+
+
+# Candidate analysis
+## Common candidates in each unfilled cell
+Go through each unfilled cell and list the missing elements for the row, column, and block containing that cell (use the row and column to get the correct block).
+Calculate the elements that are in Both the row, AND the column. Make sure to find ALL of them.
+Then calculate the elements that are in Both the previous result, AND the block. Make sure to find ALL of them.
+
+Make sure to ONLY do unfilled cells, which we calculated in the section 'The positions of the zeros'.
+For each unfilled cell you examine, do the following calculations (example below):
+STEP_A: row_missing_elements.intersection(column_missing_elements) = [elements in both row_missing_elements AND column_missing_elements]
+STEP_B: STEP_A.intersection(block_missing_elements) = [elements in both STEP_A AND block_missing_elements]
+common_missing_elements: [STEP_B]
+FOUND {found_count} OF MAX FOUR: cell(row, column) (print this line if there is Only one common_missing_element in that cell, otherwise leave this line blank and keep going. However if you find four out of four cells, you MUST stop searching cells)
+
+Example:
+### first_row_unfilled_columns: second, seventh, eighth
+#### 1 of {max_cells}
+(first_row, second_column):
+import first_row_missing_elements, second_column_missing_elements, top_left_block_missing_elements
+STEP_A: [2,7,8].intersection([1,2,7]) = [2,7]
+STEP_B: [2,7].intersection([2,9]) = [2] (You MUST reference the section '### Block missing elements - Clearly listed' to get the CORRECT block_missing_elements list! The block_name listed TWO LINES BACK!!!)
+common_missing_elements: [2]
+FOUND {found_count} OF MAX FOUR: cell(first_row, second_column) (If the cell has one only one common_missing_element, also print "FOUND {number_found} OF MAX FOUR: cell(row, column)", then keep going)
+
+If you find the max of four cells to output, after printing the expected "FOUND FOUR OF MAX FOUR: cell(row, column)" IMMEDIATELY print "STOPPING SEARCH AT FOUR MAX CELLS. Stopping with current_cell_count of max_cells cells searched"
+When you print this, IMMEDIATELY stop searching
+
+When you've done max_cells, OR when you stop due to "FOUND FOUR OF MAX FOUR", STOP listing cells and print:
+"Finished printing number_of_searched_cells out of max_cells cells, found single_candidate_cells_found out of a max of 4" (using appropriate numbers, max is 17 out of 17 or 4 out of 4)
+
+# Outputting the found cells
+## Collating Results
+For Every unfilled cell that had ONLY one common element (marked with "FOUND: cell(row, column)"), list them below so they are all in one place.
+
+FOUND: cell(first_row, second_column)
+
+Make sure to list ALL of the ones you found, up to a max of four
+
+If there where none, instead print "There were no unfilled cells with only one common_missing_element"
+
+
+## Unbiased Results
+For every cell in the results,to a MAX of four, list them in the format:
+cell(first_row, second_column)
+first_row_missing_elements = [2,7,8]
+second_column_missing_elements = [1,2,7]
+top_left_block_missing_elements = [2,7]
+
+Surround the entire list in a pair of <analysis output></analysis output> tags
+
+Neither of the results sections should list the common_missing_elements found.
+
+Make sure to list all cells marked with "FOUND", to a max of four.
+
+If there were none, instead print "There are no candidate cells" inside the analysis output tags, and nothing else
+
+
+
+# Final Notes
+You MUST finish ALL required sections IN FULL.
+
+Use these instructions to analyze the current sudoku from the previous message.
+
+Begin

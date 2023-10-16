@@ -1,0 +1,184 @@
+# Task and background
+- My previous message contains the last few hundred characters of a Sudoku analysis.
+- You are examining the text in the "Unbiased Results" section of my previous message. Ignore all text before that section (of my previous message) as was part of the working out (and may be cutoff at the beginning).
+- The cells given in the section "Unbiased Results" are cells which were found to have only one possible candidate.
+- However, the process which found the given cells will sometimes make mistakes, due to having to check so many cells at once.
+- Your task is to use the given instructions to perform an independent verification or rejection of the given cells, then to update the verified ones in the Sudoku.
+- Detailed instructions are provided below, but an overview is as follows:
+    - Calculate the possible candidate elements for each cell using the method given below.
+    - If a cell has multiple candidates, or fails some other given condition, reject that cell as a mistake made by the previous process.
+    - Update and rotate the Sudoku, then output it.
+- Complete all steps starting at STEP_ONE.
+
+
+# STEP_ONE Extracting Previous Results
+- Extract the results of the <analysis output></analysis output> tag in the '# Unbiased Results' section of my previous message. Only use the extracted results, nothing else from that message.
+- If you do not see the '# Unbiased Results' header or the opening analysis output tag, that means they were cut off when the results were extracted. In that case, make sure the message ends in the closing analysis output tag and take the last four COMPLETE cells given. Make sure NOT to take a partial cell, look for each the starting word 'cell'.
+- There should only be a maximum of four cells given in my previous message. If there is more than that, take ONLY a maximum of FOUR cells, as that's all the system can handle.
+- Print the extracted text from the analysis output tag under the current heading "STEP_ONE Extracting Previous Results". Do not print the heading or the tags from the previous message.
+- When you print the text, change '_missing_elements' to '_candidates' for the row, column, and block for every cell. Everything else should remain the same.
+- These cells will be used in STEP_TWO.
+
+
+# STEP_TWO Calculating the candidates of each cell
+- For each cell from STEP_ONE, use the following method to calculate the candidates of that cell.
+- Find the shortest list out of the row, column, or block.
+- Break up the lists into two lists each:
+    - '{list_name}_low' containing all digits in the list up to 5 (the 'low' digits)
+    - '{list_name}_high' containing all digits in the list from 6 upwards (the 'high' digits)
+- For each cell:
+    - Loop through the digits of the shortest set. The candidates are a subset of each of the three sets, and the shortest set gives the least digits to search.
+    - For each digit, count the number of times that digit appears in each appropriate list using list.count(digit).
+    - After that on the same line, sum the counts that line to get the total_count.
+    - Most importantly, if the total_count is 2, immediately print "FOUND A CANDIDATE".
+- At the end of each cell, find all the digits which had a total_count of 2 (marked by 'FOUND A CANDIDATE') and list them as the candidates of that cell.
+- Then move to the next cell until all are done.
+- If there are more than 4 cells, cap the number to check at 4.
+
+- Example (this example uses numbers to better demonstrate breaking up the lists based on the specific digits):
+## Cell 1 of {number of cells}
+cell({row_name}, {column_name}):
+
+{row_name}_candidates.length = 6
+{column_name}_candidates.length = 6
+{block_name}_candidates.length = 5
+
+shortest_list = {block_name}_candidates = digits to search
+
+{row_name}_candidates = [1,2,4,6,7,9], broken into {row_name}_candidates_low = [1,2,4] and {row_name}_candidates_high = [6,7,9]
+{column_name}_candidates = [1,3,4,5,6,9], broken into {column_name}_candidates_low = [1,3,4,5] and {column_name}_candidates_high = [6,9]
+{block_name}_candidates = [2,3,6,8,9], broken into {block_name}_candidates_low = [2,3] and {block_name}_candidates_high = [6,8,9]
+
+Checking {block_name}_candidates_low digits against: {row_name}_candidates_low and {column_name}_candidates_low
+2: [1,2,4].count(2) = 1, [1,3,4,5].count(2) = 0, total_count(2) = 1
+3: [1,2,4].count(3) = 0, [1,3,4,5].count(3) = 1, total_count(3) = 1
+
+Checking {block_name}_candidates_high digits against: {row_name}_candidates_high and {column_name}_candidates_high
+6: [6,7,9].count(6) = 1, [6,9].count(6) = 1, total_count(6) = 2 FOUND A CANDIDATE
+8: [6,7,9].count(8) = 0, [6,9].count(8) = 0, total_count(8) = 0
+9: [6,7,9].count(9) = 1, [6,9].count(9) = 1, total_count(9) = 2 FOUND A CANDIDATE
+
+Confirmed candidates found for cell({row_name}, {column_name}): [6,9]
+
+
+# STEP_THREE Checking the number of elements in each cell
+- For each cell, count the number of elements in the candidates of that cell using .length().
+- After each length, either print "length is 1, Passes" if the length is 1, or print "length is {length}, not 1, Rejected" if the length is Not one.
+- Example (shows both forms, a rejection and passing cells):
+cell({row_name_A}, {column_name_A}): [f,i]
+[f,i].length = 2
+length is 2, not 1, Rejected
+
+cell({row_name_B}, {column_name_B}): [h]
+[h].length = 1
+length is 1, Passes
+
+cell({row_name_C}, {column_name_C}): [e]
+[e].length = 1
+length is 1, Passes
+
+- After doing this for all the cells, list the cells which Passed, making sure Not to list any Rejected cells.
+- Example:
+## Passing Cells
+cell({row_name_B}, {column_name_B}): [h]
+cell({row_name_C}, {column_name_C}): [e]
+
+
+# STEP_FOUR: Grouping Cells with Corresponding Rows
+- Group each cell from the "Passing Cells" in STEP_THREE with their corresponding row from the current Sudoku. Do not update them yet.
+- If there are no passing cells to update, print "There are no cells to update" and move to the next step.
+- In this step, don't print the whole Sudoku, only the rows and cells to be updated.
+
+- Example:
+{row_name_B}: [g,0,0,0,e,b,f,d,0]
+cell({row_name_B}, {column_name_B}): [h]
+
+{row_name_C}: [0,i,0,0,a,0,0,f,d]
+cell({row_name_C}, {column_name_C}): [e]
+
+
+# STEP_FIVE: Applying Cell Updates to Rows
+- Now that the cells to update are cleanly grouped with the appropriate rows, confirm the column position and update each appropriate row.
+- However, and this is VITAL: If the column position does NOT have a zero, IMMEDIATELY reject that cell and move on to the next.
+- When updating the row, follow the method in the example of breaking up the list into three groups with the middle group having only the cell to update, updating it, then putting the lists back together.
+- The column position is just the number version of the name, so 'fourth_column' would be the 4th position, ect.
+- Calculate the number of elements in before the cell with '{position} - 1', and the number of elements after the cell with '9 - {position}'
+
+- Example:
+## 1 of {number of cells to process}
+{row_name_B}: [g,0,0,0,e,b,f,d,0]
+cell({row_name_B}, {column_name_B}): [h]
+The eighth_column is index 7 of {row_name_B}
+{row_name_B}[7] == d, WHICH IS NOT 0. This cell is rejected and will not be updated.
+
+## 2 of {number of cells to process}
+{row_name_C}: [0,i,0,0,a,0,0,f,d]
+cell({row_name_C}, {column_name_C}): [e] ((note, in this example the column is fourth_column))
+The fourth_column is index 3 of {row_name_C}
+{row_name_C}[3] == 0, so we can proceed.
+Updating index 3 to 'e'
+let {row_name_C}[3] = e
+now {row_name_C} is [0,i,0,e,a,0,0,f,d]
+
+- Reminder: Only cells with a value of 0 can be updated.
+
+
+# STEP_SIX: Printing the Updated Sudoku
+- Now print the Sudoku using the updated rows
+- Specify the rows to update first to be sure they aren't forgotten. Do not include any rejected cells.
+
+- Example:
+The row to update is example_fifth_row
+Using the contents of example_updated_fifth_row
+first_row: [first_row_elements]
+second_row: [second_row_elements]
+third_row: [third_row_elements]
+fourth_row: [fourth_row_elements]
+fifth_row: [updated_fifth_row_elements]
+sixth_row: [sixth_row_elements]
+seventh_row: [seventh_row_elements]
+eighth_row: [eighth_row_elements]
+ninth_row: [ninth_row_elements]
+
+
+# STEP_SEVEN: Shifting the Rows of the Sudoku
+- Before you output the Sudoku, the top three rows need to shifted to the bottom, like cutting a deck of cards.
+- This will shift the rows to the following order: fourth, fifth, sixth, seventh, eighth, ninth, first, second, third.
+- Make sure to use the updated Sudoku from STEP_SIX
+
+- Example:
+fourth_row: [fourth_row_elements]
+fifth_row: [fifth_row_elements]
+sixth_row: [sixth_row_elements]
+seventh_row: [seventh_row_elements]
+eighth_row: [eighth_row_elements]
+ninth_row: [ninth_row_elements]
+first_row: [first_row_elements]
+second_row: [second_row_elements]
+third_row: [third_row_elements]
+
+
+# STEP_EIGHT Fixing the Row Names and Outputting the Sudoku
+- WITHOUT moving the rows of the Sudoku, standardize the row names.
+- Also surround the Sudoku in output tags to clearly mark it as the output.
+- Do not write ANYTHING after the closing output tag, as it will interfere with the system extracting your output.
+
+- Example:
+<Output>
+first_row: [fourth_row_elements]
+second_row: [fifth_row_elements]
+third_row: [sixth_row_elements]
+fourth_row: [seventh_row_elements]
+fifth_row: [eighth_row_elements]
+sixth_row: [ninth_row_elements]
+seventh_row: [first_row_elements]
+eighth_row: [second_row_elements]
+ninth_row: [third_row_elements]
+</Output>
+
+
+# Final notes
+- Ensure all outputs are clearly labeled using the simple headers provided in the instructions.
+- Do not use code blocks. Just plain text with the headers in the instructions is fine.
+- Stop ONLY after completing STEP_EIGHT, writing NOTHING ELSE after you write the final closing output tag.
+- Begin
