@@ -67,6 +67,7 @@ puzzle_banks = {
         "018090050030100640006035008704513900000270010052000034205060001691000000003951006", # October 20, 2023
         "000000083000000000108300470030810900020900068059004007000080006370060024080240030", # October 21, 2023
         "006700240000080006080200007000600081204978650800001902500000000100869000028450709", # October 22, 2023
+        "000300079006009100100050006700000030800000905390208000610905040250043001007001020", # October 23, 2023
         ],
     "nytimes": [
         "075396000000050209968000057430600810600543000009100603007005026096002030500061070", # October 17, 2023
@@ -127,6 +128,7 @@ def main():
     parser_run_prompt.add_argument('--max-retries', type=int, default=3, help='Maximum number of times to retry OpenAI requests')
     parser_run_prompt.add_argument('--require-solvable-puzzle', type=int, default=2, help='Every nth model response should have a solvable puzzle in its output.')
     parser_run_prompt.add_argument('--stop-if-solved-puzzle-detected', type=bool, default=True, help='Use a hueristic to detected solved Sudokus and stop early')
+    parser_run_prompt.add_argument('--use-checkpoint', type=bool, default=False, help="Whether to load a checkpoint file or start from scratch")
     parser_run_prompt.set_defaults(func=run_prompt)
     
     # Create 'check-file' subcommand
@@ -214,7 +216,7 @@ def evaluate_puzzle(puzzle, fixed_prompt, args):
     log_dir.mkdir(parents=True, exist_ok=True)
     args.output = str(log_dir / (args.prompt + "." + puzzle + "." + args.output))
     args.checkpoint = str(log_dir / (args.prompt + "." + puzzle + '.ckpt'))
-    if Path(args.checkpoint).exists():
+    if args.use_checkpoint and Path(args.checkpoint).exists():
         with open(args.output, 'a') as log_file:
             log_file.write("Resuming from checkpoint")
         checkpoint = Checkpoint.load(args.checkpoint)
@@ -231,10 +233,10 @@ def evaluate_puzzle(puzzle, fixed_prompt, args):
         solved_board = solve_puzzle(checkpoint.args.puzzle)
         solved = grid_to_string(solved_board)
         if candidate:
-            candidate = rotate_sudoku_emily(candidate, checkpoint.turn_number)
-            print(f"C: {diff_strings(solved, candidate)}", file=file)
+            candidate = rotate_sudoku_emily(candidate, len(checkpoint.solution_history))
             print(f"S: {solved}", file=file)
-        for i, p in enumerate(checkpoint.solution_history):
+            print(f"C: {diff_strings(solved, candidate)}", file=file)
+        for i, p in enumerate(checkpoint.solution_history, 1):
             p = rotate_sudoku_emily(p, i) # Emily's puzzles are rotated
             #print(diff_strings(p, e.checkpoint.args.puzzle))
             #print(diff_strings(e.checkpoint.args.puzzle, p))

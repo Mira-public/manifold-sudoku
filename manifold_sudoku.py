@@ -110,8 +110,9 @@ def rotate_sudoku(puzzle, di):
     assert di >= 0
     return puzzle[-di:] + puzzle[:-di]
 
-def rotate_sudoku_emily(puzzle, turn_number):
-    return rotate_sudoku(puzzle, 27*(turn_number+1))
+# Solution 0 is the initial puzzle, so no rotation
+def rotate_sudoku_emily(puzzle, solution_number):
+    return rotate_sudoku(puzzle, 27*solution_number)
 
 # The official Python bindings were taking like 3 minutes for some reason, so just POST the API directly.
 def openai_chat_completion(messages, args, n=1):
@@ -219,6 +220,10 @@ def run_gpt_4(entries, args, statistics):
                     temperature=0,
                     messages=convert_pairs_to_openai(entries)
                 )
+                if max_output_tokens == response["usage"]["completion_tokens"]:
+                    #print("@@@@ RESPONSE:", response)
+                    print(f"Received exactly {max_output_tokens} tokens. This indicates the response was truncated rather than GPT-4 choosing to end the response. Retrying again because long prompts are known to have non-determinism")
+                    continue
                 break
             except openai.error.Timeout as e:
                 print(f"Received timeout: {e}")
@@ -234,9 +239,7 @@ def run_gpt_4(entries, args, statistics):
         # response = openai_chat_completion(openai_entries, args)
         elapsed_time = time.time() - start_time
         print(f"Elapsed time for {args.model} call: {elapsed_time:.2f} seconds.\n")
-        if max_output_tokens == response["usage"]["completion_tokens"]:
-            print("@@@@ RESPONSE:", response)
-            raise Exception(f"Received exactly {max_output_tokens} tokens. Exiting because you may have hit the limit accidentally.")
+
         set_cache(cache_key, response)
     statistics.total_tokens += response["usage"]["total_tokens"]
     statistics.output_tokens += response["usage"]["completion_tokens"]
