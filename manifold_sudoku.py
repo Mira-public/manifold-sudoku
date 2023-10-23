@@ -21,17 +21,20 @@ def convert_pairs_to_openai(entries):
 def openai_api_key():
     return os.environ.get("OPENAI_API_KEY")
 
-def find_solved_sudoku(text):
-    pattern = r"([1-9][0\-_|\+\s\n]*?){81}"
+def extract_sudoku(text):
+    cell_pattern = r"\D*(\d)"
+    sudoku_pattern = cell_pattern*81 + r"\D*"
+    mat = re.search(sudoku_pattern, text)
+    return ''.join(mat.groups())
+
+def find_solved_sudoku(pattern, text):
     mat = re.search(pattern, text)
     if mat:
-        return mat.group(0)
+        prematch = mat.group()
+        print(f"@@@@ PREMATCH={prematch}")
+        return extract_sudoku(prematch)
     else:
         return None
-
-def condense_sudoku(text):
-    return ''.join(char for char in text if char.isdigit())
-    
 
 @dataclass
 class Checkpoint:
@@ -42,6 +45,7 @@ class Checkpoint:
     output_tokens: int = 0
     total_tokens: int = 0
     conversation = []
+    solution_history = []
     
     def total_cost(self, model):
         if model == "gpt-3.5-turbo":
@@ -58,6 +62,7 @@ class Checkpoint:
             "output_tokens": self.output_tokens,
             "total_tokens": self.total_tokens,
             "conversation": self.conversation,
+            "solution_history": self.solution_history,
         }
         return checkpoint
         
@@ -79,6 +84,7 @@ class Checkpoint:
         ckpt.output_tokens = checkpoint["output_tokens"]
         ckpt.total_tokens = checkpoint["total_tokens"]
         ckpt.conversation = checkpoint["conversation"]
+        ckpt.solution_history = checkpoint["solution_history"]
         return ckpt
 
     @classmethod
@@ -98,8 +104,15 @@ def solve_puzzle(puzzle_string):
         return solved_board
     except:
         return None
-    
-    
+
+def rotate_sudoku(puzzle, di):
+    di = di%81
+    assert di >= 0
+    return puzzle[-di:] + puzzle[:-di]
+
+def rotate_sudoku_emily(puzzle, turn_number):
+    return rotate_sudoku(puzzle, 27*(turn_number+1))
+
 # The official Python bindings were taking like 3 minutes for some reason, so just POST the API directly.
 def openai_chat_completion(messages, args, n=1):
     url = "https://api.openai.com/v1/chat/completions"
@@ -162,11 +175,13 @@ def set_cache(key, value):
 
 # Remove args that shouldn't change the result of any single invocation to GPT-4
 def important_args(args):
-    ret = vars(args).copy()
-    del ret['max_turns']
-    del ret['max_transitions']
-    del ret['log_style']
-    return ret
+    vs = vars(args)
+    return {
+        "max-output-tokens": vs["max_output_tokens"],
+        "puzzle": vs["puzzle"],
+        "prompt": vs["prompt"],
+        "model": vs["model"],
+        }
     
 def count_conversation_tokens(entries):
     token_counts = [len(gpt4_enc.encode(message)) for (_,message) in entries]
@@ -220,6 +235,7 @@ def run_gpt_4(entries, args, statistics):
         elapsed_time = time.time() - start_time
         print(f"Elapsed time for {args.model} call: {elapsed_time:.2f} seconds.\n")
         if max_output_tokens == response["usage"]["completion_tokens"]:
+            print("@@@@ RESPONSE:", response)
             raise Exception(f"Received exactly {max_output_tokens} tokens. Exiting because you may have hit the limit accidentally.")
         set_cache(cache_key, response)
     statistics.total_tokens += response["usage"]["total_tokens"]
@@ -241,6 +257,9 @@ def collect_transition_rules_until_limit(fixed_prompt_function, response_limit=5
 
     return transition_rules
 
+def grid_to_string(board):
+    return ''.join([str(c) for row in board for c in row])
+
 
 def string_to_list_of_lists(puzzle_string):
     return [[int(puzzle_string[i * 9 + j]) for j in range(9)] for i in range(9)]
@@ -250,7 +269,6 @@ def string_to_list_of_strings(puzzle_string):
 
 def string_to_multiline_string(puzzle_string):
     return "\n".join(string_to_list_of_strings(puzzle_string))
-
 
 def string_to_visual_representation(puzzle_string):
     rows = [puzzle_string[i * 9:(i + 1) * 9] for i in range(9)]
@@ -326,10 +344,14 @@ def truncate_to_last_n_tokens(text, n, encoding):
     return truncated_text
 
 @dataclass
-class PuzzleSolution:
+class PuzzleSolution(Exception):
     checkpoint : Any
-    potential_solution : str
-    solution : Any
+    solution : str
+
+@dataclass
+class UnsolvablePuzzle(Exception):
+    checkpoint : Any
+    unsolvable : str
 
 def apply_transition_rule(checkpoint, transition_rule, args):
     def conv_token_counts(pair):
@@ -346,6 +368,9 @@ def apply_transition_rule(checkpoint, transition_rule, args):
         checkpoint.conversation.insert(index, (role, message))
     def remove(index):
         checkpoint.conversation.pop(index)
+    def checkpoint_solution(puzzle):
+        print(f"SOLUTION CHECKPOINT:{puzzle}")
+        checkpoint.solution_history.append(puzzle)
     match transition_rule:
         case Remove(index):
             index = translate_index(index)
@@ -368,12 +393,27 @@ def apply_transition_rule(checkpoint, transition_rule, args):
                     log_conversation(checkpoint, args.output)
                 case "emily":
                     log_conversation_emily(checkpoint, args.output)
-            potential_solution = find_solved_sudoku(response)
-            if potential_solution and args.stop_if_solved_puzzle_detected:
-                print(f"Found a potential solved Sudoku puzzle:\n{potential_solution}")
-                condensed = condense_sudoku(potential_solution)
-                solution = solve_puzzle(condensed)
-                raise PuzzleSolution(checkpoint, potential_solution, solution)
+            potential_solution = find_solved_sudoku(args.solution_pattern, response)
+            if not potential_solution and checkpoint.turn_number % args.require_solvable_puzzle == 0:
+                raise Exception(f"No puzzle pound in {response}")
+            if potential_solution:
+                checkpoint_solution(potential_solution)
+                is_complete = "0" not in potential_solution
+                if is_complete:
+                    print(f"POTENTIAL SOLUTION:{potential_solution}")
+                    if args.stop_if_solved_puzzle_detected:
+                        solution = solve_puzzle(potential_solution)
+                        if solution:
+                            print("Early-stopping with valid solution")
+                            raise PuzzleSolution(checkpoint, solution)
+                        else:
+                            raise Exception(f"Unsolvable puzzle: {potential_solution}")
+                else:
+                    solution = solve_puzzle(potential_solution)
+                    #print("@@@@@@@", potential_solution, solution)
+                    if not solution:
+                        raise UnsolvablePuzzle(checkpoint, potential_solution)
+                        
         case Truncate(index, num_tokens):
             index = translate_index(index)
             entry = checkpoint.conversation[index]

@@ -2,3 +2,4 @@ py-sudoku
 requests
 tiktoken
 openai
+termcolor

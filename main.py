@@ -2,13 +2,16 @@ from solutions.catnee import catnee_prompt_1
 from solutions.joshua import joshua_prompt_1
 from solutions.peter import peter_prompt_1
 from solutions.emily.emily import emily_prompt_2
-from manifold_sudoku import collect_transition_rules_until_limit, execute_fixed_prompt, Checkpoint, find_solved_sudoku, string_to_visual_representation, solve_puzzle, PuzzleSolution, load_cache
+from manifold_sudoku import collect_transition_rules_until_limit, execute_fixed_prompt, Checkpoint, find_solved_sudoku, string_to_visual_representation, solve_puzzle, PuzzleSolution, load_cache, UnsolvablePuzzle, grid_to_string, rotate_sudoku, rotate_sudoku_emily
 import argparse
 import time
 import copy
 import concurrent.futures
 import os
 from pathlib import Path
+import re
+from termcolor import colored
+import sys
 
 puzzle_banks = {
     # https://www.latimes.com/games/sudoku
@@ -53,8 +56,27 @@ puzzle_banks = {
         "031790008005014090000620105000140000100509204000208006008461000060000901010080047", # October 9, 2023
         "028017904600480000000020610010050070070061490009000003700008240053000000184000065", # October 10, 2023
         "002000347030140506500003008000800000200005009090204065005000801900000700871050694", # October 11, 2023
+        "000000300900100056000735090059062040321400500000003000690007001147200030000000089", # October 12, 2023
+        "076040008000100900401908076100560000307402069009080100800601400005030680614000390", # October 13, 2023
+        "006028000052000610040000000000903580008406090304005000000000073260031840703500020", # October 14, 2023
+        "036000902008500410000080600803000107900017304710030000307651040095740200000900706", # October 15, 2023
+        "000400010600502000450080690000000082026970000183200900001053400308620050205810706", # October 16, 2023
+        "007630210014590000200070900000000170300710009000000603020000005600208090700340800", # October 17, 2023
+        "431080600702004300000020010005003900093508007100006500000000006920000005057000100", # October 18, 2023
+        "702000300640038057050710000076020180814906030030080506000041260108005000000370000", # October 19, 2023
+        "018090050030100640006035008704513900000270010052000034205060001691000000003951006", # October 20, 2023
+        "000000083000000000108300470030810900020900068059004007000080006370060024080240030", # October 21, 2023
+        "006700240000080006080200007000600081204978650800001902500000000100869000028450709", # October 22, 2023
         ],
+    "nytimes": [
+        "075396000000050209968000057430600810600543000009100603007005026096002030500061070", # October 17, 2023
+        ]
 }
+
+SOLUTION_REGEXES = {
+    'default': r"([1-9][0\-_|\+\s\n]*?){81}",
+    'emily-2': r"<Output>\s*(?:\w+_row: \[(\d),(\d),(\d),(\d),(\d),(\d),(\d),(\d),(\d)\]\s*){9}</Output>",
+    }
 
 def check_file(args):
     with open(args.file_path, "r") as file:
@@ -76,6 +98,10 @@ def check_puzzle(args):
             else:
                 bad_puzzle = True
                 print("Bad puzzle:", puzzle)
+    if args.puzzle:
+        if not solve_puzzle(args.puzzle):
+            bad_puzzle = True
+            print("Bad argument puzzle")
     if not bad_puzzle:
         print("All puzzles good.")
 
@@ -99,6 +125,7 @@ def main():
     parser_run_prompt.add_argument('--puzzle', type=str, required=True, help='Sudoku puzzle string')
     parser_run_prompt.add_argument('--prompt', type=str, required=True, help='Name of the fixed prompt')
     parser_run_prompt.add_argument('--max-retries', type=int, default=3, help='Maximum number of times to retry OpenAI requests')
+    parser_run_prompt.add_argument('--require-solvable-puzzle', type=int, default=2, help='Every nth model response should have a solvable puzzle in its output.')
     parser_run_prompt.add_argument('--stop-if-solved-puzzle-detected', type=bool, default=True, help='Use a hueristic to detected solved Sudokus and stop early')
     parser_run_prompt.set_defaults(func=run_prompt)
     
@@ -130,9 +157,9 @@ def run_prompt(args):
         #'emily-1': emily_prompt_1,
         'emily-2': emily_prompt_2,
     }
-
     puzzles =  puzzle_banks[args.puzzle] if args.puzzle in puzzle_banks else args.puzzle.split(",")
     fixed_prompt = prompts[args.prompt]
+    args.solution_pattern = SOLUTION_REGEXES[args.prompt] if args.prompt in SOLUTION_REGEXES else SOLUTION_REGEXES['default']
     start_time = time.time()
     evaluate_multiple_puzzles(puzzles, fixed_prompt, args)
 
@@ -154,7 +181,32 @@ def evaluate_multiple_puzzles(puzzles, fixed_prompt, args):
             #    print(f"An error occurred during evaluation: {e}")
 
     return results
+
+def diff_strings(str1, str2, color='red'):
+    if len(str1) != len(str2):
+        return "Error: Strings must be of equal length"
     
+    highlighted_diff = ""
+    for char1, char2 in zip(str1, str2):
+        if char1 != char2:
+            highlighted_diff += colored(char2, color)
+        else:
+            highlighted_diff += char2
+    return highlighted_diff
+
+def diff_strings(str1, str2, color='red', ignore_chars='0'):
+    if len(str1) != len(str2):
+        return "Error: Strings must be of equal length"
+    
+    highlighted_diff = ""
+    for char1, char2 in zip(str1, str2):
+        skip = char1 in ignore_chars or char2 in ignore_chars
+        if char1 != char2 and not skip:
+            highlighted_diff += colored(char2, color)
+        else:
+            highlighted_diff += char2
+    return highlighted_diff
+
 def evaluate_puzzle(puzzle, fixed_prompt, args):
     args = copy.deepcopy(args)
     args.puzzle = puzzle
@@ -175,19 +227,36 @@ def evaluate_puzzle(puzzle, fixed_prompt, args):
                 log_file.write(f"Creating fresh checkpoint for puzzle {args.puzzle}\n")
         checkpoint = Checkpoint()
         checkpoint.args = args
-
+    def print_history(checkpoint, candidate=None, file=sys.stderr):
+        solved_board = solve_puzzle(checkpoint.args.puzzle)
+        solved = grid_to_string(solved_board)
+        if candidate:
+            candidate = rotate_sudoku_emily(candidate, checkpoint.turn_number)
+            print(f"C: {diff_strings(solved, candidate)}", file=file)
+            print(f"S: {solved}", file=file)
+        for i, p in enumerate(checkpoint.solution_history):
+            p = rotate_sudoku_emily(p, i) # Emily's puzzles are rotated
+            #print(diff_strings(p, e.checkpoint.args.puzzle))
+            #print(diff_strings(e.checkpoint.args.puzzle, p))
+            print(f"{i}: {diff_strings(checkpoint.args.puzzle, p)}", file=file)
+        
     start_time = time.time()
     try:
-        result_checkpoint = execute_fixed_prompt(checkpoint, fixed_prompt, args)
-    except PuzzleSolution(checkpoint, potential_solution, solution):
-        result_checkpoint = checkpoint
-        if solution:
-            # TODO: Check that it's a solution to the original puzzle, not just any solved Sudoku
-            print("Puzzle solved: " + str(potential_solution))
-        else:
-            print("Puzzle solution invalid: " + str(potential_solution))
-    statistics = result_checkpoint["statistics"]
+        result = execute_fixed_prompt(checkpoint, fixed_prompt, args)
+        result_checkpoint = result["statistics"]
+        print_history(checkpoint)
+    except PuzzleSolution as e:
+        result_checkpoint = e.checkpoint
+        print(f"Early-stopping with solution: {e.solution}")
+    except UnsolvablePuzzle as e:
+        result_checkpoint = e.checkpoint
+        print(f"Early-stopping because the following solution checkpoint is unsolvable:")
+        print_history(e.checkpoint, candidate=e.unsolvable)
+
+
+    statistics = result_checkpoint
     with open(args.output, 'a') as log_file:
+        print_history(result_checkpoint, file=log_file)
         log_file.write(f"Done. Elapsed time:{time.time() - start_time} Estimated cost:{statistics.total_cost(args.model)} Prompt tokens:{statistics.prompt_tokens} Output tokes:{statistics.output_tokens} Total tokens:{statistics.total_tokens}\n")
     
     
