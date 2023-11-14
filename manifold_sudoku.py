@@ -13,6 +13,7 @@ import inspect
 import itertools
 import openai
 import hashlib
+from collections import Counter
 
 def convert_pairs_to_openai(entries):
     formatted_messages = [{"role": role, "content": content} for role, content in entries]
@@ -113,6 +114,39 @@ def rotate_sudoku(puzzle, di):
 # Solution 0 is the initial puzzle, so no rotation
 def rotate_sudoku_emily(puzzle, solution_number):
     return rotate_sudoku(puzzle, 27*solution_number)
+
+def find_problem_in_sudoku(puzzle):
+    if not len(puzzle) == 81:
+        return f"Sudoku has incorrect length. {len(puzzle)} != 81"
+    def check_group(group, group_type, index):
+        """Check if a group (row, column, or 3x3 subgrid) contains duplicates."""
+        filtered_group = [num for num in group if num != 0]
+        duplicates = +(Counter(filtered_group) - Counter(range(1,10)))
+
+        if duplicates:
+            return f"Duplicate {set(duplicates)} in {group_type} {index + 1}."
+        return ""
+
+    grid = string_to_list_of_lists(puzzle)
+    
+    # Check rows and columns
+    for i in range(9):
+        row_check = check_group(grid[i], "row", i)
+        if row_check:
+            return row_check
+        column_check = check_group([grid[j][i] for j in range(9)], "column", i)
+        if column_check:
+            return column_check
+
+    # Check 3x3 subgrids
+    for i in range(0, 9, 3):
+        for j in range(0, 9, 3):
+            subgrid = [grid[x][y] for x in range(i, i + 3) for y in range(j, j + 3)]
+            subgrid_check = check_group(subgrid, "3x3 subgrid at ({}, {})".format(i+1, j+1), 0)
+            if subgrid_check:
+                return subgrid_check
+
+    return f"Valid: {puzzle}"
 
 # The official Python bindings were taking like 3 minutes for some reason, so just POST the API directly.
 def openai_chat_completion(messages, args, n=1):
@@ -289,7 +323,7 @@ def string_to_visual_representation(puzzle_string):
         visual_representation += visual_row.rstrip() + '\n'
     return visual_representation
 
-def string_to_2d_representation_no_bars(puzzle):
+def string_to_2d_representation_no_bars(puzzle, joiner=" "):
     xss = string_to_list_of_lists(puzzle)
     representation = ""
     for xs in xss:

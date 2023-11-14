@@ -2,7 +2,8 @@ from solutions.catnee import catnee_prompt_1
 from solutions.joshua import joshua_prompt_1
 from solutions.peter import peter_prompt_1
 from solutions.emily.emily import emily_prompt_2
-from manifold_sudoku import collect_transition_rules_until_limit, execute_fixed_prompt, Checkpoint, find_solved_sudoku, string_to_visual_representation, solve_puzzle, PuzzleSolution, load_cache, UnsolvablePuzzle, grid_to_string, rotate_sudoku, rotate_sudoku_emily
+
+from manifold_sudoku import collect_transition_rules_until_limit, execute_fixed_prompt, Checkpoint, find_solved_sudoku, string_to_visual_representation, solve_puzzle, PuzzleSolution, load_cache, UnsolvablePuzzle, grid_to_string, rotate_sudoku, rotate_sudoku_emily, extract_sudoku, find_problem_in_sudoku
 import argparse
 import time
 import copy
@@ -79,7 +80,7 @@ puzzle_banks = {
         ],
     "nytimes": [
         "075396000000050209968000057430600810600543000009100603007005026096002030500061070", # October 17, 2023
-        ]
+        ],
 }
 
 SOLUTION_REGEXES = {
@@ -98,6 +99,13 @@ def check_file(args):
     else:
         print("No potential solved Sudoku puzzle found in the file.")
 
+def read_stdin_as_string():
+    lines = []
+    for line in sys.stdin:
+        lines.append(line.rstrip())
+
+    return '\n'.join(lines)
+        
 def check_puzzle(args):
     bad_puzzle = False
     for k,puzzles in puzzle_banks.items():
@@ -108,9 +116,12 @@ def check_puzzle(args):
                 bad_puzzle = True
                 print("Bad puzzle:", puzzle)
     if args.puzzle:
+        if args.puzzle == "input":
+            args.puzzle = read_stdin_as_string()
+            args.puzzle = extract_sudoku(args.puzzle)
         if not solve_puzzle(args.puzzle):
             bad_puzzle = True
-            print("Bad argument puzzle")
+            print("Bad argument puzzle", find_problem_in_sudoku(args.puzzle))
     if not bad_puzzle:
         print("All puzzles good.")
 
@@ -166,6 +177,7 @@ def run_prompt(args):
         'peter-1': peter_prompt_1,
         #'emily-1': emily_prompt_1,
         'emily-2': emily_prompt_2,
+        "oztelle": oztelle_prompt,
     }
     puzzles =  puzzle_banks[args.puzzle] if args.puzzle in puzzle_banks else args.puzzle.split(",")
     fixed_prompt = prompts[args.prompt]
