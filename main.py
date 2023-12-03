@@ -1,7 +1,7 @@
 from solutions.catnee import catnee_prompt_1
 from solutions.joshua import joshua_prompt_1
 from solutions.peter import peter_prompt_1
-from solutions.emily.emily import emily_prompt_2
+from solutions.emily.emily import emily_prompt_2, emily_simulate_run
 
 from manifold_sudoku import collect_transition_rules_until_limit, execute_fixed_prompt, Checkpoint, find_solved_sudoku, string_to_visual_representation, solve_puzzle, PuzzleSolution, load_cache, UnsolvablePuzzle, grid_to_string, rotate_sudoku, rotate_sudoku_emily, extract_sudoku, find_problem_in_sudoku
 import argparse
@@ -88,6 +88,10 @@ SOLUTION_REGEXES = {
     'emily-2': r"<Output>\s*(?:\w+_row: \[(\d),(\d),(\d),(\d),(\d),(\d),(\d),(\d),(\d)\]\s*){9}</Output>",
     }
 
+SOLUTION_CHECKS = {
+    'emily-2': emily_simulate_run,
+    }
+
 def check_file(args):
     with open(args.file_path, "r") as file:
         file_content = file.read()
@@ -110,6 +114,11 @@ def check_puzzle(args):
     bad_puzzle = False
     for k,puzzles in puzzle_banks.items():
         for puzzle in puzzles:
+            for k in SOLUTION_CHECKS:
+                check_function = SOLUTION_CHECKS[k]
+                _,_,_,solved = check_function(puzzle, print_enabled=False)
+                if solved < 0:
+                    print(f"Puzzle unsolvable with technique {k}: {puzzle}")
             if solve_puzzle(puzzle):
                 continue
             else:

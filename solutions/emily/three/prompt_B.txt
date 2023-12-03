@@ -1,0 +1,277 @@
+- My previous message contains the last few hundred characters of a Sudoku analysis.
+- You are examining the text between the <analysis output></analysis output> tags in the '## Unbiased Results' section of my previous message. Ignore any text appearing before the opening <analysis output> tag, as it was part of the working out and should be ignored.
+- The cells given inside analysis output tags are cells which were found to have only one possible candidate.
+- However, the process which found the given cells sometimes made mistakes, due to having to check so many cells at once.
+- Your task is to use the given instructions to perform a Thorough Independent Verification or Rejection of the given cells, then updating the sudoku with the verified ones.
+- Detailed instructions are provided below, but an overview is as follows:
+    - Calculate the possible candidate elements for each cell using the Thorough method given below.
+    - If a cell has multiple candidates, reject that cell as a mistake made by the previous process.
+    - Update and rotate the Sudoku, then output it.
+- Complete all steps starting at STEP_ONE.
+
+- Note: Block names from the Row name and Column name.
+- (don't print this table, it's just here for reference).
+- In order to not get confused by the block names, here is a reference table.
+- These three for RowOne, RowTwo, or RowThree
+Row{row_number == One|Two|Three} and ColumnOne, ColumnTwo, or ColumnThree means BlockOne
+Row{row_number == One|Two|Three} and ColumnFour, ColumnFive, or ColumnSix means BlockTwo
+Row{row_number == One|Two|Three} and ColumnSeven, ColumnEight, or ColumnNine means BlockThree
+- OR these three for RowFour, RowFive, or RowSix
+Row{row_number == Four|Five|Six} and ColumnOne, ColumnTwo, or ColumnThree means BlockFour
+Row{row_number == Four|Five|Six} and ColumnFour, ColumnFive, or ColumnSix means BlockFive
+Row{row_number == Four|Five|Six} and ColumnSeven, ColumnEight, or ColumnNine means BlockSix
+- OR these three for RowSeven, RowEight, or RowNine
+Row{row_number == Seven|Eight|Nine} and ColumnOne, ColumnTwo, or ColumnThree means BlockSeven
+Row{row_number == Seven|Eight|Nine} and ColumnFour, ColumnFive, or ColumnSix means BlockEight
+Row{row_number == Seven|Eight|Nine} and ColumnSeven, ColumnEight, or ColumnNine means BlockNine
+
+- Note: Possible values and lengths for PreCellColumnsList.
+- (don't print this table, it's just here for reference).
+- These (in general) are the possible values and associated lengths for PreCellColumnsList in STEP_FIVE.
+- Note that (except for the ColumnOne list which is empty and has length 0), these all have length implied by the element BEFORE the current column_name. That is, the accurate length is the length implied by The Last Column in each list (which is the column Before column_name).
+When column_name == ColumnOne: [].length = 0
+When column_name == ColumnTwo: [ColumnOne].length = 1
+When column_name == ColumnThree: [ColumnOne,ColumnTwo].length = 2
+When column_name == ColumnFour: [ColumnOne,ColumnTwo,ColumnThree].length = 3
+When column_name == ColumnFive: [ColumnOne,ColumnTwo,ColumnThree,ColumnFour].length = 4
+When column_name == ColumnSix: [ColumnOne,ColumnTwo,ColumnThree,ColumnFour,ColumnFive].length = 5
+When column_name == ColumnSeven: [ColumnOne,ColumnTwo,ColumnThree,ColumnFour,ColumnFive,ColumnSix].length = 6
+When column_name == ColumnEight: [ColumnOne,ColumnTwo,ColumnThree,ColumnFour,ColumnFive,ColumnSix,ColumnSeven].length = 7
+When column_name == ColumnNine: [ColumnOne,ColumnTwo,ColumnThree,ColumnFour,ColumnFive,ColumnSix,ColumnSeven, ColumnEight].length = 8
+
+
+- Begin at STEP_ONE
+# STEP_ONE Extracting Previous Results
+- Extract the results of the <analysis output></analysis output> tag in the '# Unbiased Results' section of my previous message. ONLY use the extracted results, nothing else from that message. If you can see any of the working above you MUST ignore it and do YOUR OWN calculations using ONLY the Unbiased Results.
+- When printing the cell names, use Almost the same format, but do not include the {block_name}, so the cell name format you print should be `cell({row_name}, {column_name})`. You Still Need to print the Row, Column, AND Block candidates for each.
+- If you do not see the '# Unbiased Results' header or the opening analysis output tag, that means they were cut off when the results were extracted. In that case, make sure the message ends in the closing analysis output tag and take the last six COMPLETE cells given. Make sure NOT to take a partial cell, always look for each the starting word 'cell' of each cell.
+- There should only be a maximum of six cells given in my previous message. If there are more than that, take ONLY a Maximum of SIX CELLS, as that's all the system can handle.
+- Print the extracted text from the analysis output tag under the current heading '# STEP_ONE Extracting Previous Results'. Do not print the heading or the tags from the previous message, just the required contents.
+- These cells will be used in STEP_TWO.
+
+
+# STEP_TWO Calculating the candidates of each cell
+- For each cell from STEP_ONE, use the following method to calculate the candidates of that cell.
+- Find the shortest list out of the row, column, or block.
+- Break up each of the Candidates lists into two lists each:
+    - '{list_name}Low' containing only the {list_name} digits up to 5 (the 'Low' digits)
+    - '{list_name}High' containing only the {list_name} digits 6 or higher (the 'High' digits)
+- For each cell:
+    - Loop through the digits of the shortest {list_name}, first {list_name}Low, then {list_name}High, to cover the whole {list_name}. The candidates are a subset of each of the three {list_name} lists, and the shortest list gives the least digits to search.
+    - For each digit, count the number of times that digit appears in each appropriate list using list.count(digit).
+    - After that on the same line, sum the counts that line to get the TotalCount.
+    - Most importantly, if the TotalCount is 2, immediately print "FOUND A CANDIDATE".
+- At the end of each cell, find all the digits which had a TotalCount of 2 (marked by 'FOUND A CANDIDATE') and list them as the candidates of that cell.
+- Then move to the next cell until all are done.
+- If there are more than 6 cells, cap the number to check at 6.
+
+- At the start of this section (After the '# STEP_TWO Calculating the candidates of each cell' heading, but Before the first '## Cell 1 of {number of cells}' heading) print DigitsLow and DigitsHigh for reference:
+DigitsLow = [1,2,3,4,5]
+DigitsHigh = [6,7,8,9]
+
+- For each cell in STEP_ONE, use the following format to calculate the Candidates of that cell:
+## Cell {current_cell_count, starts at 1, capped at 6} of {number of cells, capped at 6}
+cell({row_name}, {column_name}):
+Candidates{row_name}.length = {the number of elements in Candidates{row_name}}
+Candidates{column_name}.length = {the number of elements in Candidates{column_name}}
+Candidates{block_name}.length = {the number of elements in Candidates{block_name}}
+
+shortest_list = Candidates{row_name|column_name|block_name, whichever has the smallest length} = digits to search
+The shortest list will be checked against the other two lists: Candidates{name of one of the remaining lists} and Candidates{name of the other remaining list}
+
+Breaking up the Candidates lists into Low digits [1,2,3,4,5] and High digits [6,7,8,9]:
+Candidates{row_name} = [the elements of Candidates{row_name}], broken into Candidates{row_name}Low = [only the digits from Candidates{row_name} that are in DigitsLow, that is only digits <= 5 (note that the lists are already sorted)] and Candidates{row_name}High = [only the digits from Candidates{row_name} that are in DigitsHigh, that is only digits >= 5 (note that the lists are already sorted)]
+Candidates{column_name} = [the elements of Candidates{column_name}], broken into Candidates{column_name}Low = [only the digits from Candidates{column_name} that are in DigitsLow, that is only digits <= 5 (note that the lists are already sorted)] and Candidates{column_name}High = [only the digits from Candidates{column_name} that are in DigitsHigh, that is only digits >= 5 (note that the lists are already sorted)]
+Candidates{block_name} = [the elements of Candidates{block_name}], broken into Candidates{block_name}Low = [only the digits from Candidates{block_name} that are in DigitsLow, that is only digits <= 5 (note that the lists are already sorted)] and Candidates{block_name}High = [only the digits from Candidates{block_name} that are in DigitsHigh, that is only digits >= 5 (note that the lists are already sorted)]
+
+- You Must check both the Low digits And the High digits from the shortest_list, starting with Low, then High.
+- You must always check the Low digits from shortest_list. The following line must Always be printed.
+Checking digits in Candidates{shortest_list}Low = [the elements of Candidates{shortest_list}Low] against: Candidates{one of the remaining lists}Low = [the elements of Candidates{one of the remaining lists}Low] and Candidates{the other remaining list}Low = [the elements of Candidates{the other remaining list}Low]
+- For each digit in Candidates{shortest_list}Low, print the following:
+{current_digit}: [the elements of Candidates{one of the remaining lists}Low].count({current_digit}) = {the correct count, 0 or 1}, [Candidates{the other remaining list}Low].count({current_digit}) = {the correct count, 0 or 1}, TotalCount({current_digit}) = {the sum of both counts for the current_digit, 0 or 1 or 2} {IF the sum of both counts == 2, print " FOUND A CANDIDATE" here, else move on to the next digit}
+
+- You must always check the High digits from shortest_list. The following line must Always be printed.
+Checking digits in Candidates{shortest_list}High = [the elements of Candidates{shortest_list}High] against: Candidates{one of the remaining lists}High = [the elements of Candidates{one of the remaining lists}High] and Candidates{the other remaining list}High = [the elements of Candidates{the other remaining list}High]
+- For each digit in Candidates{shortest_list}High, print the following:
+{current_digit}: [the elements of Candidates{one of the remaining lists}High].count({current_digit}) = {the correct count, 0 or 1}, [Candidates{the other remaining list}High].count({current_digit}) = {the correct count, 0 or 1}, TotalCount({current_digit}) = {the sum of both counts for the current_digit, 0 or 1 or 2} {IF the sum of both counts == 2, print " FOUND A CANDIDATE" here, else move on to the next digit}
+
+Confirmed candidates found for cell({row_name}, {column_name}): [the elements which were in all of the candidates lists, marked by " FOUND A CANDIDATE" while checking digits]
+- Then move on to the next cell
+{end of cell candidates format}
+
+- For reference, here is an example of breaking up Candidates lists into Low and High digits, to clarify the process:
+- CandidatesExampleRowName = [1,2,4,6,7,9], broken into CandidatesExampleRowNameLow = [1,2,4] and CandidatesExampleRowNameHigh = [6,7,9]
+- CandidatesExampleColumnName = [1,3,4,5,6,9], broken into CandidatesExampleColumnNameLow = [1,3,4,5] and CandidatesExampleColumnNameHigh = [6,9]
+- CandidatesExampleBlockName = [2,3,6,8,9], broken into CandidatesExampleBlockNameLow = [2,3] and CandidatesExampleBlockNameHigh = [6,8,9]
+
+
+# STEP_THREE Checking the number of elements in each cell
+- For each cell, count the number of elements in the candidates of that cell using .length().
+- After each length, either print "length is 1, Passes" if the length is 1, or print "length is {length}, not 1, Rejected" if the length is Not one.
+- Example (shows both forms, a rejection and passing cells):
+cell({row_name_A}, {column_name_A}): [f,i]
+[f,i].length = 2
+length is 2, not 1, Rejected
+
+cell({row_name_B}, {column_name_B}): [h]
+[h].length = 1
+length is 1, Passes
+
+cell({row_name_C}, {column_name_C}): [e]
+[e].length = 1
+length is 1, Passes
+
+- After doing this for all the cells, list the cells which Passed, making sure Not to list any Rejected cells.
+- Example:
+## Passing Cells
+cell({row_name_B}, {column_name_B}): [h]
+cell({row_name_C}, {column_name_C}): [e]
+
+
+# STEP_FOUR: Grouping Cells with Corresponding Rows
+- Group each cell from the "Passing Cells" in STEP_THREE with their corresponding row from the current Sudoku. Do not update them yet.
+- If there are no passing cells to update, print "There are no cells to update" and move to the next step.
+- List All rows from RowOne to RowNine
+- List all Passing Cells from '## Passing Cells' in your STEP_THREE, each cell Must be Directly Underneath the Correct row.
+
+- First, list the rows that have Passing Cells.
+Rows with Passing Cells: {list the rows of the passing cells. For the example this would be `RowOne, RowTwo`, but use your Own passing cells}
+{newline}
+
+- Then print all rows (starting with {RowOne}), printing the cells-to-update for each row underneath that row (if the row has cells-to-update).
+- Use the following format:
+(- For each row, if the row from the previous sudoku output (Not updated)):
+{row_name}: [the elements of {row_name}, from the previous output]
+(- if the row has no cells-to-update, move on the next row):
+(- However if the given row Does have cells-to-update, list the row followed immediately by the cells to update for the current row):
+cell({row_name}, {column_name}): [candidate element]
+
+- Make sure to list all rows from the previous sudoku (not yet updated), and all cells-to-update from '## Passing Cells'.
+
+
+# STEP_FIVE: Applying Cell Updates to Rows
+- The best way to ensure accuracy when updating an element is to be methodical.
+- For each cell-to-update, print out each column by name, along with the element currently in that column.
+- Then after printing all column names and the element in it, identify the column to update.
+- Then, and this is important, Reprint the column list with {column_name} updated to the candidate element (and all other columns the same).
+- Finally, print the updated Row.
+- Do this for all cells-to-update.
+
+- First print this Vital Note at the start of STEP_FIVE (just under STEP_FIVE heading), printed with Nothing Changed:
+VITAL NOTE Printed Verbatim: When listing all column names Before {column_name} it is [] if column_name is ColumnOne, it is [ColumnOne] if column_name is ColumnTwo, it is [ColumnOne,ColumnTwo] if column_name is ColumnThree, ect. Every PreCellColumnsList ends with [...{the column BEFORE column_name}], except when column_name is ColumnOne, that is the only exception.
+- This note is So important that it must be repeated, in full and WITHOUT CHANGE in Every cell update (at the appropriate section). It MUST NOT be modified.
+
+- Use the format below for each Passing Cell:
+## Updating 1 of {number_of_cells_to_update}
+cell({row_name}, {column_name}): [candidate element]
+{row_name} = [the elements of {row_name}]
+The {column_name} element of {row_name} needs to be updated to [candidate element]
+
+ColumnOne: {element[0]}
+ColumnTwo: {element[1]}
+ColumnThree: {element[2]}
+ColumnFour: {element[3]}
+ColumnFive: {element[4]}
+ColumnSix: {element[5]}
+ColumnSeven: {element[6]}
+ColumnEight: {element[7]}
+ColumnNine: {element[8]}
+
+Now replacing {column_name} with the element to update {candidate element}, such that {column_name} = {candidate element}
+Redoing column list like we just did, but with {column_name} set to {candidate element}
+
+{all columns and their elements fully listed as above, now with {column_name} set to the candidate element}
+
+Before we print the row, we need to ensure it will have no mistakes, being Especially careful about the element just before the updated cell.
+Counting number of columns (and thus number of elements) BEFORE {column_name}.
+VITAL NOTE Printed Verbatim: When listing all column names Before {column_name} it is [] if column_name is ColumnOne, it is [ColumnOne] if column_name is ColumnTwo, it is [ColumnOne,ColumnTwo] if column_name is ColumnThree, ect. Every PreCellColumnsList end with [...{the column BEFORE column_name}], except when column_name is ColumnOne, that is the only exception.
+First list all column names Before {column_name} (See VITAL NOTE Printed Verbatim above, start at ColumnOne and DON'T FORGET TO END WITH the column BEFORE the current column_name!!! {column_name} does Not appear on this list!!! The ONLY time you don't is if {column_name} is ColumnOne, in which case the list is empty.):
+PreCellColumnsList = [list all column names BEFORE {column_name}, DON'T FORGET to end with the column BEFORE {column_name}, and DON'T put {column_name} on the list!!!]
+Then the number of columns in PreCellColumnsList (which Never includes the current column). This list has length implied by the last column name in the list, which is the column BEFORE the current column, and is One Less than the number version of the column number in {column_name}:
+PreCellColumnsList.length => [the elements of PreCellColumnsList].length = {PreCellColumnsList.length}
+Now the elements of the columns in PreCellColumnsList, which is the first {PreCellColumnsList.length} elements of {row_name}:
+PreCellList = [Column Element for Column in PreCellColumnsList]
+
+The candidate element goes in the position directly AFTER PreCellList. So we first make the start of the updated row by appending (APPENDING!!!) {candidate element} to PreCellList (this will have length PreCellColumnsList.length + 1):
+PreCellListWithCandidateElementAppended => PreCellList.append({candidate element}) = {ALL elements of PreCellList, followed Afterwards by {candidate element} (as the last appended element)}
+Now we print this list again, but with ,... at the end (such as [element,element,...]), to make it clear what the updated row starts with:
+Updated{row_name}StartingElements = [the elements of PreCellListWithCandidateElementAppended, followed by ..., to make it clear what the updated list starts with]
+Finally, print the updated row, which WITHOUT EXCEPTION starts with All the elements of PreCellListWithCandidateElementAppended (the first {PreCellColumnsList.length} + 1 = {PreCellListWithCandidateElementAppended.length, the same as {PreCellColumnsList.length} + 1} elements of the updated row). No adjustments are made, this is just the PreCellListWithCandidateElementAppended elements, followed by the rest of the row:
+Updated{row_name} = [the already calculated elements of the updated {row_name}, from the column list you just printed, which starts with ALL of the elements of PreCellListWithCandidateElementAppended WITHOUT EXCEPTION]
+- And move on to the next cell_to_update, until all are done.
+
+
+# STEP_SIX: Printing the Updated Sudoku
+- The output Must Not have spaces in the list. So directly underneath the STEP_SIX heading you must print:
+Reminder: Removing Spaces From The Sudoku Rows, so it can be correctly picked up by the system.
+
+-Print all updated rows, to be sure we don't confuse them with the original rows.
+- Make sure to print the Exact updated rows you calculated in STEP_FIVE.
+- Start by printing:
+Updated Rows:
+- Then print each of the updated rows in the form:
+Updated{row_name} = [the elements of Updated{row_name} from STEP_FIVE]
+
+- Now print the Sudoku using the updated rows.
+- Print the Sudoku with spaces in the lists, only using commas to separate digits.
+- Specify the rows to update first to be sure they aren't forgotten. Do not include any rejected cells.
+
+- Example, follow the following format but using Your Own Rows:
+- First print:
+The rows to update are {row_names to update}
+Using the contents of {the rows to update as Update{row_name}}
+Printing Sudoku:
+- Print each Row or UpdatedRow. Each should either look like `{row_name}: [the elements of {row_name}]` or `Updated{row_name}: [the elements of Updated{row_name}]`:
+{RowOne or UpdatedRowOne}: [RowOneElements or UpdatedRowOneElements]
+{RowTwo or UpdatedRowTwo}: [RowTwoElements or UpdatedRowTwoElements]
+{RowThree or UpdatedRowThree}: [RowThreeElements or UpdatedRowThreeElements]
+{RowFour or UpdatedRowFour}: [RowFourElements or UpdatedRowFourElements]
+{RowFive or UpdatedRowFive}: [RowFiveElements or UpdatedRowFiveElements]
+{RowSix or UpdatedRowSix}: [RowSixElements or UpdatedRowSixElements]
+{RowSeven or UpdatedRowSeven}: [RowSevenElements or UpdatedRowSevenElements]
+{RowEight or UpdatedRowEight}: [RowEightElements or UpdatedRowEightElements]
+{RowNine or UpdatedRowNine}: [RowNineElements or UpdatedRowNineElements]
+
+
+# STEP_SEVEN: Shifting the Rows of the Sudoku
+- Before you output the Sudoku, the top three rows(RowOne, RowTwo, and RowThree) need to shifted to the bottom, like cutting a deck of cards.
+- This will shift the rows to the following order from top to bottom: Four, Five, Six, Seven, Eight, Nine, One, Two, Three.
+- Make sure to use the Sudoku from STEP_SIX
+
+- Each row should either look like `{row_name}: [the elements of {row_name}]` or `Updated{row_name}: [the elements of Updated{row_name}]`.
+- Format:
+{RowFour or UpdatedRowFour}: [RowFourElements or UpdatedRowFourElements]
+{RowFive or UpdatedRowFive}: [RowFiveElements or UpdatedRowFiveElements]
+{RowSix or UpdatedRowSix}: [RowSixElements or UpdatedRowSixElements]
+{RowSeven or UpdatedRowSeven}: [RowSevenElements or UpdatedRowSevenElements]
+{RowEight or UpdatedRowEight}: [RowEightElements or UpdatedRowEightElements]
+{RowNine or UpdatedRowNine}: [RowNineElements or UpdatedRowNineElements]
+{RowOne or UpdatedRowOne}: [RowOneElements or UpdatedRowOneElements]
+{RowTwo or UpdatedRowTwo}: [RowTwoElements or UpdatedRowTwoElements]
+{RowThree or UpdatedRowThree}: [RowThreeElements or UpdatedRowThreeElements]
+
+
+# STEP_EIGHT Fixing the Row Names and Outputting the Sudoku
+- WITHOUT moving the rows of the Sudoku, standardize the row names.
+- Make sure to use the Sudoku from STEP_SEVEN (with standardized names).
+- Also surround the Sudoku in output tags to clearly mark it as the output.
+- Do not write ANYTHING after the closing output tag, as it will interfere with the system extracting your output.
+
+- Example:
+<output>
+RowOne: [RowFourElements]
+RowTwo: [RowFiveElements]
+RowThree: [RowSixElements]
+RowFour: [RowSevenElements]
+RowFive: [RowEightElements]
+RowSix: [RowNineElements]
+RowSeven: [RowOneElements]
+RowEight: [RowTwoElements]
+RowNine: [RowThreeElements]
+</output>
+
+
+# Final notes
+- Ensure all sections and subsections are clearly labeled using the simple headers provided in the instructions. Especially each STEP_NUMBER section.
+- Stop ONLY after completing STEP_EIGHT, writing NOTHING ELSE after you write the final closing output tag.
+- Begin

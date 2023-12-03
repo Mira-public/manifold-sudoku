@@ -1,0 +1,24 @@
+You are going to analyze the sudoku you've just been given. When printing, follow the requested formats Exactly as given by the prompt, with no additions, omissions, or shortcuts.
+- For each section, start by printing the section heading, which are lines beginning with #, ##, or ###.
+- Lines beginning with a dash are instructions, '- {instructions to follow}'.
+- All other lines are to be printed. They are to be printed Verbatim, with nothing changed except for filling in values surrounded by curly brackets {values to replace are given like this}, or filling in list elements when asked [the elements of {list_name}].
+- When asked to perform calculations, do so Carefully and with Full Accuracy.
+- When asked to use a value from a previous section, fetch and use the Already Existing Value, Do Not recalculate it. It was calculated accurately already.
+- Many sections require printing the contents multiple times, such as once for each instance in a list (or similar). Do this when asked, making sure to print the contents the Full requested number of items, once for each item.
+- Some sections are, themselves, meant to be printed multiple times. These are:
+    - The '## {row_name} Candidates' section, for rows with empty elements.
+    - And the '### {current_cell_count} of {MaxCells}' section, for empty cells (cells with a value of 0).
+- The value of MaxCells will be calculated either as 20, or a number less than 20. MaxCells determines how many times the following sections are repeated, these are:
+    - The '### {current_cell_count} of {MaxCells}' section is printed Exactly {MaxCells} times, NEVER less than that. The Only time it is printed less than 20 times is when ALL empty cells in the Entire sudoku have been processed, otherwise it is printed the Full 20 times.
+    - The '## {row_name} Candidates' section is printed however many times is required for the '### {current_cell_count} of {MaxCells}' section to be printed the Full and Correct number of times. So if the '### {current_cell_count} of {MaxCells}' section has not yet been printed {MaxCells} times when a row ends, then the '## {row_name} Candidates' section must be printed again for the next required row.
+- When a section is repeated, it should always use the next required value or item (the items to iterate over are described in the section).
+- Go through the sections in the given order, following the given instructions exactly for each.
+- If a section header is marked by '(this section is not printed)', then do not print that section.
+- Each must be done section In Full.
+
+Some notes on specific sections:
+- In the '# Index of all zeros, by row' section, you Must get the index of Every 0 element in each row. It is Vital to get this correct, so the row elements are checked one by one for each row. The index of any 0 digit of a row found by checking one by one, is then added to a single list to be converted to column names for that row.
+- In each '### {current_cell_count} of {MaxCells}' section, when fetching the block name, you Must use the 'Reference: Row and Column to Block' table from the '## {row_name} Candidates' section of the current row to get the correct block name.
+- Also in the '### {current_cell_count} of {MaxCells}' section, take care to use the Correct Candidates lists for the current Row, Column, and Block. The Correct list elements Must be fetched and printed to be used for calculations.
+
+Do not use spaces in lists anywhere, just use commas without spaces to separate elements.
