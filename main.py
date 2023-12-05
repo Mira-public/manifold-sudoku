@@ -78,6 +78,10 @@ puzzle_banks = {
         "974800005620400030000259000480000090300607040790000003008910070047005600030086014", # October 30, 2023
         "530004100007000023019005084001020078000003950000000231950067800280100600070042000", # October 31, 2023
         ],
+    "latimes-december": [
+        "208400705563000000407300600600000081040610007080040300009000003006001270034250108", # December 1, 2023
+        "450000060189000400200005800001429708008060005004080200000370020902006001007010084", # December 2, 2023
+        ],
     "nytimes": [
         "075396000000050209968000057430600810600543000009100603007005026096002030500061070", # October 17, 2023
         ],
@@ -85,7 +89,7 @@ puzzle_banks = {
 
 SOLUTION_REGEXES = {
     'default': r"([1-9][0\-_|\+\s\n]*?){81}",
-    'emily-2': r"<Output>\s*(?:\w+_row: \[(\d),(\d),(\d),(\d),(\d),(\d),(\d),(\d),(\d)\]\s*){9}</Output>",
+    'emily-2': r"<output>\s*(?:Row\w+: \[(\d),(\d),(\d),(\d),(\d),(\d),(\d),(\d),(\d)\]\s*){9}</output>",
     }
 
 SOLUTION_CHECKS = {
@@ -114,17 +118,17 @@ def check_puzzle(args):
     bad_puzzle = False
     for k,puzzles in puzzle_banks.items():
         for puzzle in puzzles:
-            for k in SOLUTION_CHECKS:
-                check_function = SOLUTION_CHECKS[k]
-                _,_,_,solved = check_function(puzzle, print_enabled=False)
-                if solved < 0:
-                    print(f"Puzzle unsolvable with technique {k}: {puzzle}")
             if solve_puzzle(puzzle):
                 continue
             else:
                 bad_puzzle = True
                 print("Bad puzzle:", puzzle)
     if args.puzzle:
+        for k in SOLUTION_CHECKS:
+            check_function = SOLUTION_CHECKS[k]
+            _,_,_,solved = check_function(args.puzzle, print_enabled=False)
+            if solved < 0:
+                print(f"Puzzle unsolvable with technique {k}: {args.puzzle}")
         if args.puzzle == "input":
             args.puzzle = read_stdin_as_string()
             args.puzzle = extract_sudoku(args.puzzle)
@@ -145,18 +149,19 @@ def main():
     parser_run_prompt = subparsers.add_parser("run-prompt")
     parser_run_prompt.add_argument('--log-style', type=str, default="mira", help="Log style")
     parser_run_prompt.add_argument('--log-dir', type=str, default="outputs", help="Directory to store outputs")
-    parser_run_prompt.add_argument('--max-output-tokens', type=int, default=4096, help='Maximum number of output tokens')
+    parser_run_prompt.add_argument('--max-output-tokens', type=int, default=4000, help='Maximum number of output tokens')
     parser_run_prompt.add_argument('--max-turns', type=int, default=50, help='Maximum number of turns')
     parser_run_prompt.add_argument('--max-transitions', type=int, default=200, help='Maximum number of transition rules to unroll the fixed prompt to')
     parser_run_prompt.add_argument('--output', type=str, default='sudoku_log.txt', help='Output log filename')
     parser_run_prompt.add_argument('--num-parallel', type=int, default=2, help='Maximum number of puzzles to be testing concurrently')
-    parser_run_prompt.add_argument('--model', type=str, default='gpt-4-0613', help='Model ID to use')
+    parser_run_prompt.add_argument('--model', type=str, default='gpt-4-1106-preview', help='Model ID to use')
     parser_run_prompt.add_argument('--puzzle', type=str, required=True, help='Sudoku puzzle string')
     parser_run_prompt.add_argument('--prompt', type=str, required=True, help='Name of the fixed prompt')
     parser_run_prompt.add_argument('--max-retries', type=int, default=3, help='Maximum number of times to retry OpenAI requests')
     parser_run_prompt.add_argument('--require-solvable-puzzle', type=int, default=2, help='Every nth model response should have a solvable puzzle in its output.')
     parser_run_prompt.add_argument('--stop-if-solved-puzzle-detected', type=bool, default=True, help='Use a hueristic to detected solved Sudokus and stop early')
     parser_run_prompt.add_argument('--use-checkpoint', type=bool, default=False, help="Whether to load a checkpoint file or start from scratch")
+    parser_run_prompt.add_argument('--seed', type=int, default=1)
     parser_run_prompt.set_defaults(func=run_prompt)
     
     # Create 'check-file' subcommand
@@ -186,9 +191,16 @@ def run_prompt(args):
         'peter-1': peter_prompt_1,
         #'emily-1': emily_prompt_1,
         'emily-2': emily_prompt_2,
-        "oztelle": oztelle_prompt,
+        #"oztelle": oztelle_prompt,
     }
     puzzles =  puzzle_banks[args.puzzle] if args.puzzle in puzzle_banks else args.puzzle.split(",")
+    if args.prompt in SOLUTION_CHECKS:
+        check_function = SOLUTION_CHECKS[args.prompt]
+        for puzzle in puzzles:
+            _,_,_,solved = check_function(args.puzzle, print_enabled=False)
+            if solved < 0:
+                print(f"Puzzle unsolvable with technique {k}: {args.puzzle}")
+                return
     fixed_prompt = prompts[args.prompt]
     args.solution_pattern = SOLUTION_REGEXES[args.prompt] if args.prompt in SOLUTION_REGEXES else SOLUTION_REGEXES['default']
     start_time = time.time()

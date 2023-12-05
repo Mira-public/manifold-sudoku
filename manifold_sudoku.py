@@ -222,7 +222,7 @@ def count_conversation_tokens(entries):
     token_counts = [len(gpt4_enc.encode(message)) for (_,message) in entries]
     message_tokens = sum(token_counts)
     speaker_tokens = len(entries)
-    padding_tokens = 15 + 12 # TODO: Figure out where the 15 extra tokens are coming from in Emily's prompt A and 12 in prompt B
+    padding_tokens = 0 # 15 + 12 # TODO: Figure out where the 15 extra tokens are coming from in Emily's prompt A and 12 in prompt B
     return {
         "token_counts": token_counts,
         "message_tokens": message_tokens,
@@ -230,7 +230,7 @@ def count_conversation_tokens(entries):
         "padding_tokens": padding_tokens,
         "total_tokens": message_tokens + speaker_tokens + padding_tokens,
         }
-    
+
 def run_gpt_4(entries, args, statistics):
     if args.model == 'mock':
         return "mock GPT-4 string" # Use to test without hitting API
@@ -241,7 +241,7 @@ def run_gpt_4(entries, args, statistics):
     else:
         token_stats = count_conversation_tokens(entries)
         max_tokens = args.max_output_tokens
-        max_output_tokens = max_tokens - token_stats["total_tokens"]
+        max_output_tokens = args.max_output_tokens # max_tokens - token_stats["total_tokens"]
         print(f"About to run {args.model} with {max_tokens}={max_output_tokens}+sum({token_stats['token_counts']})+{token_stats['speaker_tokens']}+{token_stats['padding_tokens']}")
         print(f"{len(entries)} Entries: {entries}")
         start_time = time.time()
