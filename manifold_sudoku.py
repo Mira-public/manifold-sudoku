@@ -37,6 +37,25 @@ def find_solved_sudoku(pattern, text):
     else:
         return None
 
+MODEL_INFOS = {
+    'gpt-3.5-turbo': {
+        "input_cost": 0.002,
+        "output_cost": 0.002,
+        },
+    'gpt-4-0613': {
+        "input_cost": 0.03,
+        "output_cost": 0.06,
+        "context_window": 8192,
+        "output_tokens": 5000,
+        },
+    'gpt-4-1106-preview': {
+        "input_cost": 0.01,
+        "output_cost": 0.03,
+        "context_window": 128_000,
+        "output_tokens": 4096,
+        },
+    }
+    
 @dataclass
 class Checkpoint:
     args = None
@@ -49,10 +68,8 @@ class Checkpoint:
     solution_history = []
     
     def total_cost(self, model):
-        if model == "gpt-3.5-turbo":
-            return 0.002 * self.total_tokens / 1000. # $0.002 / 1k tokens
-        elif model == "gpt-4":
-            return 0.03 * self.prompt_tokens / 1000. + 0.06 * self.output_tokens / 1000.
+        info = MODEL_INFOS.get(model)
+        return info["input_cost"] * self.prompt_tokens / 1000 + info["output_cost"] * self.output_tokens / 1000
 
     def serializable(self):
         checkpoint = {
@@ -231,33 +248,51 @@ def count_conversation_tokens(entries):
         "total_tokens": message_tokens + speaker_tokens + padding_tokens,
         }
 
-def run_gpt_4(entries, args, statistics):
+def run_gpt_4(entries0, args, statistics):
+    num_entries = len(entries0)
     if args.model == 'mock':
         return "mock GPT-4 string" # Use to test without hitting API
+    entries = entries0[:]
     cache_key = {"conversation": entries, "args": important_args(args)}
     c = get_cache(cache_key)
+    response = None
     if c is not None:
-        response = c
+        message = c
     else:
         token_stats = count_conversation_tokens(entries)
         max_tokens = args.max_output_tokens
         max_output_tokens = args.max_output_tokens # max_tokens - token_stats["total_tokens"]
-        print(f"About to run {args.model} with {max_tokens}={max_output_tokens}+sum({token_stats['token_counts']})+{token_stats['speaker_tokens']}+{token_stats['padding_tokens']}")
-        print(f"{len(entries)} Entries: {entries}")
+        max_output_tokens_per_request = args.max_output_tokens_per_request
         start_time = time.time()
+        message = ""
         for i in range(args.max_retries):
+            print(f"About to run {args.model} with {args.max_output_tokens}>={i+1}*{max_output_tokens_per_request}")
+            print(f"{len(entries)} Entries: {entries}")
             try:
                 response = openai.ChatCompletion.create(
                     model=args.model,
-                    max_tokens=max_output_tokens,
+                    max_tokens=max_output_tokens_per_request,
                     n=1,
                     temperature=0,
                     messages=convert_pairs_to_openai(entries)
                 )
-                if max_output_tokens == response["usage"]["completion_tokens"]:
-                    #print("@@@@ RESPONSE:", response)
-                    print(f"Received exactly {max_output_tokens} tokens. This indicates the response was truncated rather than GPT-4 choosing to end the response. Retrying again because long prompts are known to have non-determinism")
+                statistics.total_tokens += response["usage"]["total_tokens"]
+                statistics.output_tokens += response["usage"]["completion_tokens"]
+                statistics.prompt_tokens += response["usage"]["prompt_tokens"]
+                message += response["choices"][0]["message"]["content"]
+                finish_reason = response["choices"][0]["finish_reason"]
+                if max_output_tokens < (i+1)*max_output_tokens_per_request:
+                    raise Exception(f"Tokens exceeded limit. {max_output_tokens} < {i+1}*{max_output_tokens_per_request}")
+                if finish_reason == "length":
+                    entries = entries0[:]
+                    entries.append(("assistant", message))
                     continue
+
+                print(f"@@@@: {response}")
+                # if max_output_tokens == response["usage"]["completion_tokens"]:
+                #     #print("@@@@ RESPONSE:", response)
+                #     print(f"Received exactly {max_output_tokens} tokens. This indicates the response was truncated rather than GPT-4 choosing to end the response. Retrying again because long prompts are known to have non-determinism")
+                #     continue
                 break
             except openai.error.Timeout as e:
                 print(f"Received timeout: {e}")
@@ -267,18 +302,19 @@ def run_gpt_4(entries, args, statistics):
                 Checkpoint.print_checkpoint(entries)
                 raise e
         if response is None:
-            raise Exception("Unable to get a response after {args.max_retries} attempts")
-            
+            raise Exception(f"Unable to get a response after {args.max_retries} attempts")
+        if finish_reason == "length":
+            raise Exception(f"Generated more output than were allocated tokens for. {statistics.output_tokens} >= {max_output_tokens}")
         #openai_entries = convert_pairs_to_openai(entries)
         # response = openai_chat_completion(openai_entries, args)
         elapsed_time = time.time() - start_time
-        print(f"Elapsed time for {args.model} call: {elapsed_time:.2f} seconds.\n")
+        print(f"Elapsed time for {args.model} call: {elapsed_time:.2f} seconds for {statistics.output_tokens} tokens.\n")
+        set_cache(cache_key, message)
 
-        set_cache(cache_key, response)
-    statistics.total_tokens += response["usage"]["total_tokens"]
-    statistics.output_tokens += response["usage"]["completion_tokens"]
-    statistics.prompt_tokens += response["usage"]["prompt_tokens"]
-    return response["choices"][0]["message"]["content"].strip()
+    #print(f"@@@@ Cache: {message}")
+    if len(entries0) != num_entries:
+        raise Exception(f"ASSERT: {len(entries0)} != {num_entries}")
+    return message.strip()
 
 def collect_transition_rules_until_limit(fixed_prompt_function, response_limit=50, total_limit=200):
     transition_rules = []

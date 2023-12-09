@@ -3,7 +3,7 @@ from solutions.joshua import joshua_prompt_1
 from solutions.peter import peter_prompt_1
 from solutions.emily.emily import emily_prompt_2, emily_simulate_run
 
-from manifold_sudoku import collect_transition_rules_until_limit, execute_fixed_prompt, Checkpoint, find_solved_sudoku, string_to_visual_representation, solve_puzzle, PuzzleSolution, load_cache, UnsolvablePuzzle, grid_to_string, rotate_sudoku, rotate_sudoku_emily, extract_sudoku, find_problem_in_sudoku
+from manifold_sudoku import collect_transition_rules_until_limit, execute_fixed_prompt, Checkpoint, find_solved_sudoku, string_to_visual_representation, solve_puzzle, PuzzleSolution, load_cache, UnsolvablePuzzle, grid_to_string, rotate_sudoku, rotate_sudoku_emily, extract_sudoku, find_problem_in_sudoku, MODEL_INFOS
 import argparse
 import time
 import copy
@@ -96,6 +96,8 @@ SOLUTION_CHECKS = {
     'emily-2': emily_simulate_run,
     }
 
+
+
 def check_file(args):
     with open(args.file_path, "r") as file:
         file_content = file.read()
@@ -149,7 +151,8 @@ def main():
     parser_run_prompt = subparsers.add_parser("run-prompt")
     parser_run_prompt.add_argument('--log-style', type=str, default="mira", help="Log style")
     parser_run_prompt.add_argument('--log-dir', type=str, default="outputs", help="Directory to store outputs")
-    parser_run_prompt.add_argument('--max-output-tokens', type=int, default=4000, help='Maximum number of output tokens')
+    parser_run_prompt.add_argument('--max-output-tokens-per-request', type=int, default=None, help='Maximum number of output turns per API request')
+    parser_run_prompt.add_argument('--max-output-tokens', type=int, default=None, help='Maximum number of output tokens total. Multiple requests will be made summing to this.')
     parser_run_prompt.add_argument('--max-turns', type=int, default=50, help='Maximum number of turns')
     parser_run_prompt.add_argument('--max-transitions', type=int, default=200, help='Maximum number of transition rules to unroll the fixed prompt to')
     parser_run_prompt.add_argument('--output', type=str, default='sudoku_log.txt', help='Output log filename')
@@ -157,7 +160,7 @@ def main():
     parser_run_prompt.add_argument('--model', type=str, default='gpt-4-1106-preview', help='Model ID to use')
     parser_run_prompt.add_argument('--puzzle', type=str, required=True, help='Sudoku puzzle string')
     parser_run_prompt.add_argument('--prompt', type=str, required=True, help='Name of the fixed prompt')
-    parser_run_prompt.add_argument('--max-retries', type=int, default=3, help='Maximum number of times to retry OpenAI requests')
+    parser_run_prompt.add_argument('--max-retries', type=int, default=3, help='Maximum number of times to retry OpenAI requests or continue a chunked request')
     parser_run_prompt.add_argument('--require-solvable-puzzle', type=int, default=2, help='Every nth model response should have a solvable puzzle in its output.')
     parser_run_prompt.add_argument('--stop-if-solved-puzzle-detected', type=bool, default=True, help='Use a hueristic to detected solved Sudokus and stop early')
     parser_run_prompt.add_argument('--use-checkpoint', type=bool, default=False, help="Whether to load a checkpoint file or start from scratch")
@@ -203,6 +206,11 @@ def run_prompt(args):
                 return
     fixed_prompt = prompts[args.prompt]
     args.solution_pattern = SOLUTION_REGEXES[args.prompt] if args.prompt in SOLUTION_REGEXES else SOLUTION_REGEXES['default']
+    model_info = MODEL_INFOS[args.model]
+    if args.max_output_tokens_per_request is None:
+        args.max_output_tokens_per_request = model_info["output_tokens"]
+    if args.max_output_tokens is None:
+        args.max_output_tokens = model_info["context_window"]
     start_time = time.time()
     evaluate_multiple_puzzles(puzzles, fixed_prompt, args)
 
