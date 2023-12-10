@@ -256,6 +256,7 @@ def run_gpt_4(entries0, args, statistics):
     cache_key = {"conversation": entries, "args": important_args(args)}
     c = get_cache(cache_key)
     response = None
+    num_output_tokens_0 = statistics.output_tokens
     if c is not None:
         message = c
     else:
@@ -301,6 +302,7 @@ def run_gpt_4(entries0, args, statistics):
             except openai.error.InvalidRequestError as e:
                 Checkpoint.print_checkpoint(entries)
                 raise e
+        d_output_tokens = statistics.output_tokens - num_output_tokens_0
         if response is None:
             raise Exception(f"Unable to get a response after {args.max_retries} attempts")
         if finish_reason == "length":
