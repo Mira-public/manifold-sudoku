@@ -88,7 +88,11 @@ puzzle_banks = {
         "034720009608000250700900003910000765020300800070009300080001504001003000509402030", # December 7, 2023
         "703001000014823000250700004031008507000002010009000000002070080000304700307009056", # December 8, 2023
         "620953170500004300090001640480000500200000417071005980000030204700000891000106000", # December 9, 2023
+        "600400020002008560704002000800300056910084003500006900360000090090607030000053601", # December 10, 2023
         ],
+    "latimes-january": [
+        "203090450400100970901247300005063080096084000704510009010400593630800040002009006", # January 1, 2023
+    ],
     "nytimes": [
         "075396000000050209968000057430600810600543000009100603007005026096002030500061070", # October 17, 2023
         ],
@@ -170,6 +174,7 @@ def main():
     parser_run_prompt.add_argument('--max-retries', type=int, default=3, help='Maximum number of times to retry OpenAI requests or continue a chunked request')
     parser_run_prompt.add_argument('--require-solvable-puzzle', type=int, default=2, help='Every nth model response should have a solvable puzzle in its output.')
     parser_run_prompt.add_argument('--stop-if-solved-puzzle-detected', type=bool, default=True, help='Use a hueristic to detected solved Sudokus and stop early')
+    parser_run_prompt.add_argument('--skip-invalid-puzzle-check', action="store_true", help='Check that puzzles match a pattern')
     parser_run_prompt.add_argument('--use-checkpoint', type=bool, default=False, help="Whether to load a checkpoint file or start from scratch")
     parser_run_prompt.add_argument('--seed', type=int, default=1)
     parser_run_prompt.set_defaults(func=run_prompt)

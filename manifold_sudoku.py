@@ -287,6 +287,7 @@ def run_gpt_4(entries0, args, statistics):
                 if finish_reason == "length":
                     entries = entries0[:]
                     entries.append(("assistant", message))
+                    entries.append(("user", "continue")) # It needs to know it was cut off during a request.
                     continue
 
                 print(f"@@@@: {response}")
@@ -469,7 +470,7 @@ def apply_transition_rule(checkpoint, transition_rule, args):
                 case "emily":
                     log_conversation_emily(checkpoint, args.output)
             potential_solution = find_solved_sudoku(args.solution_pattern, response)
-            if not potential_solution and checkpoint.turn_number % args.require_solvable_puzzle == 0:
+            if not potential_solution and not args.skip_invalid_puzzle_check and checkpoint.turn_number % args.require_solvable_puzzle == 0:
                 raise Exception(f"No puzzle pound in {response}")
             if potential_solution:
                 checkpoint_solution(potential_solution)
