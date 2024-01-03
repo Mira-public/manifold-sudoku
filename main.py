@@ -3,7 +3,7 @@ from solutions.joshua import joshua_prompt_1
 from solutions.peter import peter_prompt_1
 from solutions.emily.emily import emily_prompt_2, emily_simulate_run
 
-from manifold_sudoku import collect_transition_rules_until_limit, execute_fixed_prompt, Checkpoint, find_solved_sudoku, string_to_visual_representation, solve_puzzle, PuzzleSolution, load_cache, UnsolvablePuzzle, grid_to_string, rotate_sudoku, rotate_sudoku_emily, extract_sudoku, find_problem_in_sudoku, MODEL_INFOS
+from manifold_sudoku import collect_transition_rules_until_limit, execute_fixed_prompt, Checkpoint, find_solved_sudoku, string_to_visual_representation, solve_puzzle, PuzzleSolution, load_cache, UnsolvablePuzzle, grid_to_string, rotate_sudoku, rotate_sudoku_emily, extract_sudoku, find_problem_in_sudoku, MODEL_INFOS, get_transition_rules
 import argparse
 import time
 import copy
@@ -108,7 +108,14 @@ SOLUTION_CHECKS = {
     'emily-2': emily_simulate_run,
     }
 
-
+PROMPTS = {
+    'catnee-1': catnee_prompt_1,
+    'joshua-1': joshua_prompt_1,
+    'peter-1': peter_prompt_1,
+    #'emily-1': emily_prompt_1,
+    'emily-2': emily_prompt_2,
+    #"oztelle": oztelle_prompt,
+}
 
 def check_file(args):
     with open(args.file_path, "r") as file:
@@ -154,12 +161,26 @@ def check_puzzle(args):
 
 def print_puzzle(args):
     print(string_to_visual_representation(args.puzzle))
-        
+
+def print_transitions(args):
+    prompt = PROMPTS[args.prompt]
+    transition_rules = get_transition_rules(0, emily_prompt_2, args)
+    for i, x in enumerate(transition_rules):
+        print(f"{i}: {x}")
+    
 def main():
     load_cache()
     parser = argparse.ArgumentParser(description="Solve Sudoku using GPT-4")
     subparsers = parser.add_subparsers()
 
+    # Create 'print-transitions' subcommmand
+    parser_print_transitions = subparsers.add_parser('print-transitions', help="Print transition rules in plaintext")
+    parser_print_transitions.add_argument("prompt", help="Prompt to print transition rules for")
+    parser_print_transitions.add_argument("--max_turns", default=50)
+    parser_print_transitions.add_argument("--max_transitions", default=1000)
+    parser_print_transitions.set_defaults(func=print_transitions)
+
+    # 'run-prompt' command
     parser_run_prompt = subparsers.add_parser("run-prompt")
     parser_run_prompt.add_argument('--log-style', type=str, default="mira", help="Log style")
     parser_run_prompt.add_argument('--log-dir', type=str, default="outputs", help="Directory to store outputs")
@@ -201,14 +222,6 @@ def main():
     func(args)
     
 def run_prompt(args):
-    prompts = {
-        'catnee-1': catnee_prompt_1,
-        'joshua-1': joshua_prompt_1,
-        'peter-1': peter_prompt_1,
-        #'emily-1': emily_prompt_1,
-        'emily-2': emily_prompt_2,
-        #"oztelle": oztelle_prompt,
-    }
     puzzles =  puzzle_banks[args.puzzle] if args.puzzle in puzzle_banks else args.puzzle.split(",")
     if args.prompt in SOLUTION_CHECKS:
         check_function = SOLUTION_CHECKS[args.prompt]

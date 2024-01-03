@@ -508,11 +508,14 @@ def is_response(x):
         case InsertResponse(_):
             return True
     return False
-            
+
+def get_transition_rules(transition_index, fixed_prompt, args):
+    return itertools.islice(take_until(fixed_prompt(), is_response, args.max_turns), transition_index, args.max_transitions)
+
 def execute_fixed_prompt(checkpoint, fixed_prompt, args):
     if not inspect.isgeneratorfunction(fixed_prompt):
         raise Exception("Prompt must be generator style")
-    transition_rules = itertools.islice(take_until(fixed_prompt(), is_response, args.max_turns), checkpoint.transition_index, args.max_transitions)
+    transition_rules = get_transition_rules(checkpoint.transition_index, fixed_prompt, args)
     #transition_rules = collect_transition_rules_until_limit(fixed_prompt, response_limit=args.max_turns, total_limit=args.max_entries)
     entries = []
 
