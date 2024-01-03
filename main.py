@@ -93,6 +93,7 @@ puzzle_banks = {
     "latimes-january": [
         "203090450400100970901247300005063080096084000704510009010400593630800040002009006", # January 1, 2023
         "200043700700000005501000409016304000405901600900008100090030500004000006687420090", # January 2, 2023
+        "200760050900100000006208704090405800520870010007010420060000500400087001730092040", # January 3, 2023
     ],
     "nytimes": [
         "075396000000050209968000057430600810600543000009100603007005026096002030500061070", # October 17, 2023
@@ -230,7 +231,7 @@ def run_prompt(args):
             if solved < 0:
                 print(f"Puzzle unsolvable with technique {args.prompt}: {args.puzzle}")
                 return
-    fixed_prompt = prompts[args.prompt]
+    fixed_prompt = PROMPTS[args.prompt]
     args.solution_pattern = SOLUTION_REGEXES[args.prompt] if args.prompt in SOLUTION_REGEXES else SOLUTION_REGEXES['default']
     model_info = MODEL_INFOS[args.model]
     if args.max_output_tokens_per_request is None:
