@@ -306,7 +306,7 @@ def run_gpt_4(entries0, args, statistics):
         d_output_tokens = statistics.output_tokens - num_output_tokens_0
         if response is None:
             raise Exception(f"Unable to get a response after {args.max_retries} attempts")
-        if finish_reason == "length":
+        if finish_reason == "length" and not args.allow_truncated:
             raise Exception(f"Generated more output than were allocated tokens for. {statistics.output_tokens} >= {max_output_tokens}")
         #openai_entries = convert_pairs_to_openai(entries)
         # response = openai_chat_completion(openai_entries, args)
